@@ -15,6 +15,13 @@ def coordinatesToCountry(longitude, latitude):
             return data.result.admin1
         raise ValueError(f"No country found for coordinates: {coordinates}")
 
+def coordinatesToState(longitude, latitude):
+    coordinates = [(longitude, latitude)]
+    for data in gz.search(coordinates): # gz.search() returns a generator
+        if data.result is not None:
+            return data.result.admin2
+        raise ValueError(f"No state found for coordinates: {coordinates}")
+
 # Load all existing splits
 ds = load_dataset("Morris0401/Year-Guessr-Dataset")
 
@@ -48,7 +55,7 @@ def parse_latitude(text: str) -> float:
 success_reverse_geocoding = 0
 failed_reverse_geocoding = 0
 
-def add_country(example):
+def map_country(example):
     if example["Country"] is None:
         try:
             example["Country"] = coordinatesToCountry(parse_longitude(example["Longitude"]), parse_latitude(example["Latitude"]) )
@@ -59,7 +66,46 @@ def add_country(example):
             failed_reverse_geocoding += 1
     return example
 
-all_data = all_data.map(add_country)
+northeast = set(["Connecticut", "Maine", "Massachusetts", "New Hampshire", "Rhode Island", "Vermont", "New Jersey", "New York", "Pennsylvania"])
+midwest = set(["Illinois", "Indiana", "Michigan", "Ohio", "Wisconsin", "Iowa", "Kansas", "Minnesota", "Missouri", "Nebraska", "North Dakota", "South Dakota"])
+south = set(["Delaware", "Florida", "Georgia", "Maryland", "North Carolina", "South Carolina", "Virginia", "District of Columbia", 
+            "West Virginia", "Alabama", "Kentucky", "Mississippi", "Tennessee", 
+            "Arkansas", "Louisiana", 
+            "Oklahoma", 
+            "Texas"])
+west = set(["Arizona", "Colorado", "Idaho", "Montana", "Nevada", "New Mexico", 
+        "Utah",
+        "Wyoming",
+        "Alaska",
+        "California",
+        "Hawaii",
+        "Oregon",
+        "Washington"])
+
+def state_to_region(state):
+    if state in northeast:
+        return "Northeast"
+    elif state in midwest:
+        return "Midwest"
+    elif state in south:
+        return "South"
+    elif state in west:
+        return "West"
+    else:
+        raise ValueError(f"Unknown state: {state}")
+
+def state_region(example):
+    # this only applies where is_us is 1, but we can just try to reverse geocode the state for all entries where Country is United States
+    if example["is_us"] == 1:
+        try:
+            state = coordinatesToState(parse_longitude(example["Longitude"]), parse_latitude(example["Latitude"]) )
+            region = state_to_region(state)
+            return {"State": state, "Region": region}
+        except ValueError as e:
+            pass
+    return {"State": "", "Region": ""}
+
+all_data = all_data.map(map_country)
 
 # remove all entries where Country is still None
 # we could not reverse geocode these entries, so we will remove them from the dataset
@@ -71,6 +117,10 @@ all_data = all_data.map(lambda x, idx: {"id": idx}, with_indices=True)
 # add an "is_us" column to the dataset, which is 1 if the country is United States, and 0 otherwise
 # also allows "United States of America" as a valid country name for the United States
 all_data = all_data.map(lambda x: {"is_us": 1 if x["Country"] == "United States" or x["Country"] == "United States of America" else 0})
+
+# add a "State" column to the dataset, which is the state of the location if the country is United States, and None otherwise
+# also add a "Region" column to the dataset, which is the region of the location if the country is United States, and None otherwise
+all_data = all_data.map(state_region)
 
 print(f"Successfully reverse geocoded {success_reverse_geocoding} entries.")
 print(f"Failed to reverse geocode {failed_reverse_geocoding} entries.")
