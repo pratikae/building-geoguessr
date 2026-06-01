@@ -1,0 +1,12 @@
+model:
+  backbone: "vit_b_16"
+  pretrained: true
+  experiment_type: "linear_probe"
+
+training:
+  batch_size: 64
+  epochs: 30
+  lr: 0.001
+  loss_weights:
+    country: 1.0
+    us_state: 0.5

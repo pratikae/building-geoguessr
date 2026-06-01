@@ -5,3 +5,5 @@ Pillow
 datasets
 python-gazetteer
 tqdm
+grad-cam
+matplotlib
