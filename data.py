@@ -91,9 +91,25 @@ test_ds     = all_data.filter(lambda x: int(x["Year"]) > 1945)
 trainval_ds = all_data.filter(lambda x: int(x["Year"]) <= 1945)
 trainval_split = trainval_ds.train_test_split(test_size=0.1, seed=493, shuffle=True)
 
+# move any validation examples with a country not in the training set to the training set
+train_countries = set(trainval_split["train"]["Country"])
+
+val_ds_known = trainval_split["test"].filter(lambda x: x["Country"] in train_countries)
+val_ds_unknown = trainval_split["test"].filter(lambda x: x["Country"] not in train_countries)
+
+train_ds = concatenate_datasets([trainval_split["train"], val_ds_unknown])
+
+print(f"Moved {len(val_ds_unknown)} validation examples with unknown countries to the training set.")
+
+# also remove any test examples with a country not in the training set, since we won't be able to evaluate on those
+# should be very few since most examples are from the US, but just to be safe
+before_test_size = len(test_ds)
+test_ds = test_ds.filter(lambda x: x["Country"] in train_countries)
+print(f"Removed {before_test_size - len(test_ds)} test examples with countries not in the training set.")
+
 new_ds = DatasetDict({
     "train":      trainval_split["train"],
-    "validation": trainval_split["test"],
+    "validation": val_ds_known,
     "test":       test_ds,
 })
 
