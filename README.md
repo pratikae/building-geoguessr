@@ -10,7 +10,7 @@ This repo trains a model to predict geography from building imagery.
 python3 -m pip install -r requirements.txt
 ```
 
-2. Download and extract the dataset into the repo root:
+2. Download and extract the dataset into the repo root, throw the zip into the repo first:
 
 ```bash
 cd /homes/iws/pve2/building-geoguessr
