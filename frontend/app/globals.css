@@ -1,0 +1,200 @@
+@import "tailwindcss";
+
+@theme {
+  --color-void: #080806;
+  --color-surface: #111109;
+  --color-surface-2: #1a1a12;
+  --color-border: rgba(212, 160, 23, 0.18);
+  --color-border-bright: rgba(212, 160, 23, 0.45);
+  /* Primary accent — building gold/yellow */
+  --color-gold: #d4a017;
+  --color-gold-dim: rgba(212, 160, 23, 0.55);
+  /* Keep cyan only for model AI elements */
+  --color-cyan: #00d4ff;
+  --color-cyan-dim: rgba(0, 212, 255, 0.6);
+  --color-purple: #8b5cf6;
+  --color-green: #10b981;
+  --color-red: #ef4444;
+  --color-text: #f0ebe0;
+  --color-text-dim: #7a7060;
+  --color-text-bright: #fdf8ef;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 22px;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background-color: #080806;
+  color: #f0ebe0;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+.scroll-area {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(212, 160, 23, 0.2) transparent;
+}
+.scroll-area::-webkit-scrollbar { width: 4px; }
+.scroll-area::-webkit-scrollbar-track { background: transparent; }
+.scroll-area::-webkit-scrollbar-thumb { background-color: rgba(212, 160, 23, 0.2); border-radius: 2px; }
+
+/* Gold glow — primary UI accent */
+.glow-gold {
+  box-shadow: 0 0 22px rgba(212, 160, 23, 0.35), 0 0 64px rgba(212, 160, 23, 0.12);
+}
+.glow-gold-text {
+  text-shadow: 0 0 22px rgba(212, 160, 23, 0.6);
+}
+/* Keep cyan for AI / model elements */
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.3), 0 0 60px rgba(0, 212, 255, 0.1);
+}
+.glow-cyan-text {
+  text-shadow: 0 0 20px rgba(0, 212, 255, 0.6);
+}
+.glow-purple { box-shadow: 0 0 20px rgba(139, 92, 246, 0.4); }
+.glow-green  { box-shadow: 0 0 20px rgba(16, 185, 129, 0.4); }
+
+/* Grid overlay */
+.grid-overlay {
+  background-image:
+    linear-gradient(rgba(212, 160, 23, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(212, 160, 23, 0.025) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+/* Panel */
+.panel {
+  background: #111109;
+  border: 1px solid rgba(212, 160, 23, 0.15);
+  position: relative;
+}
+.panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 160, 23, 0.45), transparent);
+}
+
+/* Scanlines */
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent, transparent 2px,
+    rgba(212, 160, 23, 0.012) 2px,
+    rgba(212, 160, 23, 0.012) 4px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Gradient text — gold */
+.gradient-text {
+  background: linear-gradient(135deg, #d4a017 0%, #f5c842 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Heatmap */
+@keyframes heatmapReveal {
+  from { opacity: 0; }
+  to   { opacity: 0.6; }
+}
+.heatmap-overlay {
+  animation: heatmapReveal 1.5s ease-out forwards;
+  background: radial-gradient(
+    ellipse at 40% 35%,
+    rgba(255, 0, 0, 0.7) 0%,
+    rgba(255, 165, 0, 0.5) 20%,
+    rgba(255, 255, 0, 0.3) 40%,
+    rgba(0, 128, 0, 0.1) 60%,
+    transparent 80%
+  );
+}
+
+/* Pulse */
+@keyframes pulseDot {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%       { transform: scale(1.5); opacity: 0.5; }
+}
+.pulse-dot { animation: pulseDot 1.5s ease-in-out infinite; }
+
+/* Float */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-10px); }
+}
+.float { animation: float 4s ease-in-out infinite; }
+
+/* Fade in up */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+
+/* Blink cursor */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+.cursor-blink::after {
+  content: '▋';
+  animation: blink 1s step-end infinite;
+  color: #d4a017;
+}
+
+/* Ken Burns */
+@keyframes kenBurns {
+  from { transform: scale(1.0); }
+  to   { transform: scale(1.1); }
+}
+
+/* Scrapbook float-in */
+@keyframes scrapFloat {
+  from { opacity: 0; transform: translateY(36px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+
+/* Scrapbook piece directional entrances — outer div holds rotation, inner animates */
+@keyframes scrapFromLeft {
+  from { opacity: 0; transform: translateX(-80px) translateY(16px) scale(0.92); }
+  to   { opacity: 1; transform: translateX(0)     translateY(0)    scale(1);    }
+}
+@keyframes scrapFromRight {
+  from { opacity: 0; transform: translateX(80px)  translateY(16px) scale(0.92); }
+  to   { opacity: 1; transform: translateX(0)     translateY(0)    scale(1);    }
+}
+@keyframes scrapFromTop {
+  from { opacity: 0; transform: translateY(-60px) scale(0.93); }
+  to   { opacity: 1; transform: translateY(0)     scale(1);    }
+}
+@keyframes scrapFromBottom {
+  from { opacity: 0; transform: translateY(60px)  scale(0.93); }
+  to   { opacity: 1; transform: translateY(0)     scale(1);    }
+}
+
+/* Slide label */
+@keyframes labelUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
