@@ -1,0 +1,13 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
+pydantic>=2.0.0
+# Model dependencies (add when integrating):
+# torch>=2.0.0
+# torchvision>=0.15.0
+# transformers>=4.40.0
+# Pillow>=10.0.0
+# numpy>=1.26.0
+# datasets>=2.20.0        # HuggingFace datasets
+# grad-cam>=1.5.0         # pytorch-grad-cam
+# geopy>=2.4.0            # reverse geocoding

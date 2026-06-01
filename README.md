@@ -1,78 +1,168 @@
 # Building GeoGuessr
 
-This repo trains a model to predict geography from building imagery.
+**Beat Bob** — a GeoGuessr-style game where you compete against a ViT-B/16 model trained on pre-1945 architecture. Drop a pin on the globe and see if you can outguess Bob the Builder.
 
-## Setup
+Research question: *Does architecture still have a regional accent after globalization?*
 
-1. Install Python dependencies:
+---
 
-```bash
-python3 -m pip install -r requirements.txt
+## Repo structure
+
+```
+building-geoguessr/
+├── model.py          # ViT-B/16 model with hierarchical classification head
+├── train.py          # Training (linear probe + fine-tune)
+├── tune.py           # Hyperparameter search
+├── evaluate.py       # Evaluation on post-1945 test split
+├── gradcam.py        # Grad-CAM comparison between LP and FT models
+├── data.py           # Data utilities
+├── dataset.py        # Dataset class (HuggingFace + re-split by year)
+├── config.yaml       # Training config
+├── requirements.txt  # ML Python deps
+├── backend/          # FastAPI server — bridges model to game
+│   ├── main.py
+│   └── requirements.txt
+└── frontend/         # Next.js game (Beat Bob)
 ```
 
-2. Download and extract the dataset into the repo root, throw the zip into the repo first:
+---
+
+## ML pipeline
+
+### 1. Install dependencies
 
 ```bash
-cd /homes/iws/pve2/building-geoguessr
+pip install -r requirements.txt
+```
+
+### 2. Download dataset
+
+```bash
 curl -L -o builtidentity_dataset.zip https://homes.cs.washington.edu/~albertdu/builtidentity_dataset.zip
 unzip -o builtidentity_dataset.zip
 ```
 
-The dataset should extract into `resplit_year_guessr_dataset`.
+Dataset extracts into `resplit_year_guessr_dataset`. Pre-1945 buildings are train/val; post-1945 are test.
 
-## Run the pipeline
-
-Train the model with:
+### 3. Train
 
 ```bash
 python3 train.py
 ```
 
-The code uses `config.yaml` for training settings. By default, the dataset loader expects `resplit_year_guessr_dataset` in the repo root.
-
-## Hyperparameter tuning
-
-Use `tune.py` to run multiple `train.py` trials over learning rates, batch sizes, weight decay, and experiment type:
-
-```bash
-python3 tune.py --search grid --n_trials 20 --metrics_dir tuning_metrics --output tuning_results.csv
-```
-
-This will execute repeated training runs and save per-trial metrics for comparison.
-
-## Notes
-
-- The pipeline uses a Vision Transformer backbone from `torchvision`.
-- If you want to run a full fine-tune instead of a linear probe, update `config.yaml`:
+Config is in `config.yaml`. For full fine-tune instead of linear probe:
 
 ```yaml
 model:
   experiment_type: "finetune"
 ```
 
-- Model checkpoints are saved as `best_linear_probe_model.pt` or `best_finetune_model.pt`.
+Checkpoints: `best_linear_probe_model.pt` / `best_finetune_model.pt`
 
-## Evaluation
+### 4. Tune
 
-After training, run the evaluation script on the `test` split (post-1945 buildings):
+```bash
+python3 tune.py --search grid --n_trials 20 --metrics_dir tuning_metrics --output tuning_results.csv
+```
+
+### 5. Evaluate
 
 ```bash
 python3 evaluate.py --checkpoint best_finetune_model.pt --split test --metrics_path metrics/test_metrics.json
 ```
 
-The script reports:
-- `country_accuracy`
-- `us_state_accuracy`
-- `decade_accuracy`
+Reports `country_accuracy`, `us_state_accuracy`, `decade_accuracy`.
 
-If training a linear probe instead, use `best_linear_probe_model.pt` as the checkpoint.
-
-## GradCAM comparison
-
-Use `gradcam.py` to compare where the linear-probe and fine-tuned models attend on the same inputs:
+### 6. Grad-CAM
 
 ```bash
-python3 gradcam.py --lp_weights best_linear_probe_model.pt --ft_weights best_finetune_model.pt --split validation --output_dir gradcam_results --n_top 20
+python3 gradcam.py \
+  --lp_weights best_linear_probe_model.pt \
+  --ft_weights best_finetune_model.pt \
+  --split validation \
+  --output_dir gradcam_results \
+  --n_top 20
 ```
 
-The `--n_top` option controls how many of the most divergent images are visualized. This generates top-ranked divergence visualizations that help show how the models learn differently.
+---
+
+## Backend (FastAPI)
+
+Serves the model to the game frontend.
+
+### Setup
+
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+Runs on `http://localhost:8000`. Endpoints:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/buildings/random` | Random post-1945 building |
+| `GET` | `/api/buildings/{id}` | Specific building |
+| `POST` | `/api/predict/{building_id}` | Model prediction + Grad-CAM |
+
+### Plugging in the real model
+
+All model inference goes in `backend/main.py → predict_location()`. Look for `# TODO` comments. Steps:
+
+1. Load the building image (from dataset URL or cache)
+2. Preprocess: resize to 224×224, normalize with ImageNet stats
+3. Run forward pass through the trained model
+4. Softmax → predicted class + confidence
+5. Reverse-geocode class to lat/lng centroid
+6. Run Grad-CAM → save PNG → set `gradcamUrl` in response
+
+```python
+# In predict_location():
+from your_model import load_model, predict, run_gradcam
+
+model = load_model("best_finetune_model.pt")
+prediction = predict(model, image_url)
+gradcam_path = run_gradcam(model, image_url)
+```
+
+---
+
+## Frontend (Beat Bob game)
+
+### Setup
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Opens at `http://localhost:3000`. The game auto-connects to the backend at `localhost:8000`.
+
+To point at a different backend URL:
+
+```bash
+NEXT_PUBLIC_API_URL=https://your-backend.com npm run dev
+```
+
+### Game flow
+
+1. **Landing** — scrapbook collage intro, flip card with Bob
+2. **Game** — building photo (left) + interactive globe (right), 5 rounds
+3. **Guess** — click globe to place pin, optionally pick country from dropdown
+4. **Analysis** — "Bob is thinking" overlay shows predicted features + confidence
+5. **Results** — arcs on globe, score comparison (you vs Bob), cumulative total
+
+### Key files
+
+```
+frontend/
+├── app/page.tsx              # Landing page (scrapbook + flip card)
+├── app/game/page.tsx         # Game page (full layout)
+├── components/globe/         # react-globe.gl wrapper + custom pin
+├── components/game/          # ModelAnalysis, RoundResults, CountrySelector
+├── lib/api.ts                # Fetch wrappers (+ mock fallback if backend down)
+├── lib/types.ts              # Shared TypeScript types
+└── public/                   # Bob images, pin, scrapbook PNGs
+```

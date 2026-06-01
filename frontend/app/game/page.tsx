@@ -8,7 +8,7 @@ import Image from "next/image";
 import { Building, Coordinates, Country, GamePhase, ModelPrediction, RoundScore, GlobePin } from "@/lib/types";
 import { COUNTRIES } from "@/lib/countries";
 import { haversineDistance, calculateScore, formatScore, totalScore } from "@/lib/gameLogic";
-import { getRandomBuilding, getMockModelPrediction } from "@/lib/mockData";
+import { fetchRandomBuilding, fetchPrediction } from "@/lib/api";
 
 import GlobeWrapper from "@/components/globe/GlobeWrapper";
 import CountrySelector from "@/components/game/CountrySelector";
@@ -200,11 +200,12 @@ export default function GamePage() {
   const modelTotal = totalScore(scores.map((s) => ({ score: s.modelGuess.score })));
 
   useEffect(() => {
-    setBuilding(getRandomBuilding());
+    setBuilding(null);
     setUserPin(null);
     setUserCountry(null);
     setModelPrediction(null);
     setGlobeFocus(undefined);
+    fetchRandomBuilding().then(setBuilding);
   }, [round]);
 
   // Click: place / move pin
@@ -219,9 +220,11 @@ export default function GamePage() {
     setGlobeFocus({ lat: country.lat, lng: country.lng, altitude: 1.8 });
   }, []);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!userPin || !building) return;
-    setModelPrediction(getMockModelPrediction(building));
+    // Fetch prediction first (fast on local backend), then start the analysis animation
+    const prediction = await fetchPrediction(building);
+    setModelPrediction(prediction);
     setPhase("analyzing");
   }, [userPin, building]);
 
