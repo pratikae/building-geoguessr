@@ -25,42 +25,58 @@ def parse_latitude(text: str) -> float:
         return -float(text[:-1])
     raise ValueError(f"Invalid latitude format: {text}")
 
-
-def coordinates_to_country(longitude, latitude):
-    for data in gz.search([(longitude, latitude)]):
-        if data.result is not None:
-            return data.result.admin1
-        raise ValueError(f"No country found for ({longitude}, {latitude})")
-
-
-def coordinates_to_state(longitude, latitude):
-    for data in gz.search([(longitude, latitude)]):
-        if data.result is not None:
-            return data.result.admin2
-        raise ValueError(f"No state found for ({longitude}, {latitude})")
+def is_us(country_name: str) -> bool:
+    return country_name in ("United States", "United States of America")
 
 ds = load_dataset("Morris0401/Year-Guessr-Dataset")
-all_data = concatenate_datasets([ds[split] for split in ds.keys()])
+all_data = ds["wiki_dataset"]
 
 success_count = 0
 failed_count = 0
 
-def map_country(example):
-    if example["Country"] is None:
-        try:
-            example["Country"] = coordinates_to_country(
-                parse_longitude(example["Longitude"]),
-                parse_latitude(example["Latitude"]),
-            )
-            global success_count
-            success_count += 1
-        except ValueError:
-            global failed_count
-            failed_count += 1
-    return example
-
 # add all columns
-all_data = all_data.map(map_country)
+
+print("Parsing coordinates and performing reverse geocoding...")
+coordinates = []
+for example in all_data:
+    try:
+        lat = parse_latitude(example["Latitude"]) # type: ignore
+        lon = parse_longitude(example["Longitude"]) # type: ignore
+        coordinates.append((lon, lat))
+    except ValueError:
+        coordinates.append((None, None))
+
+countries = []
+states = []
+
+print("Performing reverse geocoding...")
+# batch reverse geocoding, record all countries and states to add
+
+ctr = 0
+for data in gz.search(coordinates): # gz.search() returns a generator
+    if data.result is None:
+        countries.append(None)
+        states.append(None)
+        failed_count += 1
+    else:
+        countries.append(data.result.admin1)
+        if is_us(data.result.admin1):
+            states.append(data.result.admin2)
+        else:
+            states.append(None)
+        success_count += 1
+    
+    ctr += 1
+    if ctr % 1000 == 0:
+        print(f"Processed {ctr} examples...")
+
+# map the new columns back to the dataset, 
+# an existing Country column exists
+# use those if not None,  otherwise use the reverse geocoded country
+
+all_data = all_data.map(lambda x, idx: {"Country": x["Country"] if x["Country"] is not None else countries[idx],
+                                        "State": states[idx]}, with_indices=True)
+
 all_data = all_data.filter(lambda x: x["Country"] is not None)
 print(f"Reverse geocoding: {success_count} succeeded, {failed_count} failed.")
 
@@ -69,18 +85,6 @@ all_data = all_data.map(
     lambda x: {"is_us": 1 if x["Country"] in ("United States", "United States of America") else 0}
 )
 
-def map_state(example):
-    if example["is_us"] == 1:
-        try:
-            return {"State": coordinates_to_state(
-                parse_longitude(example["Longitude"]),
-                parse_latitude(example["Latitude"]),
-            )}
-        except ValueError:
-            pass
-    return {"State": ""}
-
-all_data = all_data.map(map_state)
 
 # split into train/val/test based on year
 test_ds     = all_data.filter(lambda x: int(x["Year"]) > 1945)
