@@ -74,7 +74,7 @@ def compute_loss(predictions, targets, config, device):
 
   if is_us_mask.sum() > 0:
     us_logits = predictions["us_state"][is_us_mask]
-    us_targets = targets["us_state"][is_us_mask].to(device)
+    us_targets = targets["us_state"].to(device)[is_us_mask]
     loss_us = criterion(us_logits, us_targets)
   else:
     loss_us = torch.tensor(0.0, device=device)
