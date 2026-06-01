@@ -20,6 +20,7 @@ def parse_args():
   parser.add_argument("--experiment_type", type=str, choices=["linear_probe", "finetune"], help="override experiment type")
   parser.add_argument("--weight_decay", type=float, help="override weight decay for AdamW")
   parser.add_argument("--metrics_path", type=str, default=None, help="optional JSON file to save final metrics")
+  parser.add_argument("--checkpoint_dir", type=str, default="checkpoints", help="directory to save/load checkpoints")
   return parser.parse_args()
 
 
@@ -175,11 +176,41 @@ def main():
         weight_decay=config["training"].get("weight_decay", 0.0),
     )
 
+    experiment_type = config["model"]["experiment_type"]
+
+    checkpoint_dir = Path(args.checkpoint_dir)
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    checkpoint_path = checkpoint_dir / f"checkpoint_{experiment_type}.pt"
+    best_model_path = checkpoint_dir / f"best_{experiment_type}_model.pt"
+
     best_val_acc = 0.0
+    start_epoch = 1
+
+    if checkpoint_path.exists():
+        print(f"Resuming from checkpoint: {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+
+        best_val_acc = checkpoint.get("best_val_acc", 0.0)
+        start_epoch = checkpoint["epoch"] + 1
+
+        print(f"Resumed at epoch {start_epoch}; best val acc so far: {best_val_acc:.2f}%")
+
     epochs = config["training"]["epochs"]
 
-    print(f"starting training: {config['model']['experiment_type'].upper()}")
-    for epoch in range(1, epochs + 1):
+    if start_epoch > epochs:
+        print(f"Checkpoint already completed {epochs} epochs. Nothing to train.")
+        return
+
+    print(f"starting training: {experiment_type.upper()}")
+
+    val_loss = None
+    val_acc = None
+
+    for epoch in range(start_epoch, epochs + 1):
         print(f"\nepoch {epoch}/{epochs}")
         train_loss = train_epoch(model, train_loader, optimizer, config, device)
         val_loss, val_acc = validate(model, val_loader, config, device)
@@ -188,8 +219,21 @@ def main():
 
         if val_acc > best_val_acc:
             best_val_acc = val_acc
-            torch.save(model.state_dict(), f"best_{config['model']['experiment_type']}_model.pt")
-            print("new best model saved!")
+            torch.save(model.state_dict(), best_model_path)
+            print(f"new best model saved: {best_model_path}")
+
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "best_val_acc": best_val_acc,
+                "config": config,
+            },
+            checkpoint_path,
+        )
+
+        print(f"checkpoint saved: {checkpoint_path}")
 
     if args.metrics_path:
         import json
