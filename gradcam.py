@@ -26,7 +26,6 @@ VIT_GRID = 14  # 224px / 16px patch size
 
 
 def reshape_transform(tensor):
-    # Remove CLS token and reshape sequence → spatial grid for GradCAM
     result = tensor[:, 1:, :].reshape(tensor.size(0), VIT_GRID, VIT_GRID, tensor.size(2))
     return result.permute(0, 3, 1, 2)
 
@@ -43,7 +42,8 @@ class CountryWrapper(torch.nn.Module):
 
 def load_model(weights_path, num_countries, num_us_states, config, device):
     model = BobTheBuilder(num_countries, num_us_states, config)
-    model.load_state_dict(torch.load(weights_path, map_location=device, weights_only=True))
+    state_dict = torch.load(weights_path, map_location=device)
+    model.load_state_dict(state_dict)
     model.eval().to(device)
     return model
 
@@ -87,7 +87,6 @@ def make_cam(wrapper, target_layers, image_tensor, target_class, device):
 
 
 def to_rgb(image_tensor):
-    """Denormalize ImageNet-normalized tensor → HxWx3 float32 in [0,1]."""
     mean = np.array([0.485, 0.456, 0.406])
     std  = np.array([0.229, 0.224, 0.225])
     img  = image_tensor.cpu().numpy().transpose(1, 2, 0) * std + mean

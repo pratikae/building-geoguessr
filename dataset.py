@@ -79,7 +79,13 @@ def build_label_mappings(dataset):
         if hasattr(dataset.features[column_name], "names"):
             mapping = {name: idx for idx, name in enumerate(dataset.features[column_name].names)}
         else:
-            mapping = {value: idx for idx, value in enumerate(sorted(set(values)))}
+            unique_values = set(values)
+            if None in unique_values:
+                unique_values.remove(None)
+                mapping = {value: idx for idx, value in enumerate(sorted(unique_values))}
+                mapping[None] = len(mapping)
+            else:
+                mapping = {value: idx for idx, value in enumerate(sorted(unique_values))}
         mappings[label] = {
             "column": column_name,
             "mapping": mapping,
@@ -147,7 +153,15 @@ class HuggingFaceImageDataset(Dataset):
             if isinstance(value, int):
                 targets[label] = value
             else:
-                targets[label] = mapping[value]
+                if value not in mapping:
+                    if None in mapping:
+                        targets[label] = mapping[None]
+                    else:
+                        raise RuntimeError(
+                            f"Unexpected label value '{value}' for column '{config['column']}'."
+                        )
+                else:
+                    targets[label] = mapping[value]
 
         if "is_us" in sample:
             targets["is_us"] = int(sample["is_us"])
