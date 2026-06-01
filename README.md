@@ -30,6 +30,16 @@ python3 train.py
 
 The code uses `config.yaml` for training settings. By default, the dataset loader expects `resplit_year_guessr_dataset` in the repo root.
 
+## Hyperparameter tuning
+
+Use `tune.py` to run multiple `train.py` trials over learning rates, batch sizes, weight decay, and experiment type:
+
+```bash
+python3 tune.py --search grid --n_trials 20 --metrics_dir tuning_metrics --output tuning_results.csv
+```
+
+This will execute repeated training runs and save per-trial metrics for comparison.
+
 ## Notes
 
 - The pipeline uses a Vision Transformer backbone from `torchvision`.
