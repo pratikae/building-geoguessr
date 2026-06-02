@@ -146,7 +146,7 @@ def main():
     config = load_config(args.config)
 
     if args.lr is not None:
-        config["training"]["lr"] = args.lr
+        config["training"]["lr_head"] = args.lr
     if args.batch_size is not None:
         config["training"]["batch_size"] = args.batch_size
     if args.epochs is not None:
@@ -170,13 +170,26 @@ def main():
     else:
         model.unfreeze_backbone()
 
-    optimizer = torch.optim.AdamW(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=config["training"]["lr"],
-        weight_decay=config["training"].get("weight_decay", 0.0),
-    )
-
     experiment_type = config["model"]["experiment_type"]
+
+    wd = config["training"].get("weight_decay", 0.0)
+    if experiment_type == "linear_probe":
+        optimizer = torch.optim.AdamW(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=config["training"]["lr_head"],
+            weight_decay=wd,
+        )
+    else:
+        optimizer = torch.optim.AdamW(
+            [
+                {"params": model.vit.parameters(), "lr": config["training"]["lr_backbone"]},
+                {
+                    "params": list(model.country_head.parameters()) + list(model.us_state_head.parameters()),
+                    "lr": config["training"]["lr_head"],
+                },
+            ],
+            weight_decay=wd,
+        )
 
     checkpoint_dir = Path(args.checkpoint_dir)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
