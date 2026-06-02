@@ -173,15 +173,13 @@ def run_trial(args, trial_idx, params):
     params["experiment_type"],
     "--metrics_path",
     str(metrics_path),
-
-    # This is the important part for model-level checkpointing.
-    # train.py needs to save checkpoints here so if/when it gets killed by hyak it can still resume.
     "--checkpoint_dir",
     str(trial_checkpoint_dir),
   ]
 
+  # Always pass epochs if specified, ensuring proper parameter override
   if args.epochs is not None:
-    command += ["--epochs", str(args.epochs)]
+    command.extend(["--epochs", str(args.epochs)])
 
   print("Running trial", trial_idx, params)
   print(" ", " ".join(command))
@@ -217,10 +215,20 @@ def run_trial(args, trial_idx, params):
       **params,
     }
 
+  # Try to read metrics file, with better error messaging
   try:
+    if not metrics_path.exists():
+      raise FileNotFoundError(f"Metrics file not created: {metrics_path}")
+    
     metrics = json.loads(metrics_path.read_text())
+    
+    # Validate that we have expected metrics
+    if not metrics:
+      raise ValueError("Metrics file is empty")
+    
   except Exception as exc:
     print("Unable to read metrics file:", exc)
+    print("Last 500 chars of stderr:", stderr_text[-500:] if stderr_text else "(empty)")
     return {
       "status": "error",
       "stdout": tail_text(stdout_text),

@@ -6,8 +6,10 @@ model:
 training:
   batch_size: 64
   epochs: 30
-  lr_head:     0.0001
-  lr_backbone: 0.00001
+  lr_head: 0.0001
+  lr_backbone: 0.00001  # for finetune mode, ratio of 1:10 with lr_head
+  weight_decay: 0.01
   loss_weights:
     country: 1.0
     us_state: 0.5
+  # class weights are computed automatically from training data distribution

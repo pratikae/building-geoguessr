@@ -103,11 +103,85 @@ def get_label_cardinalities(config: Dict):
     )
 
 
+def compute_class_weights(dataset, label_column: str, num_classes: int):
+    """Compute inverse frequency weights to handle class imbalance.
+    
+    Args:
+        dataset: HuggingFace dataset
+        label_column: Column name for the labels
+        num_classes: Total number of classes
+    
+    Returns:
+        List of weights, normalized so that sum = num_classes
+    """
+    from collections import Counter
+    
+    # Get label distribution
+    labels = dataset[label_column]
+    label_counts = Counter(labels)
+    
+    # Compute weights as inverse frequency
+    weights = []
+    total_samples = len(dataset)
+    for class_idx in range(num_classes):
+        count = label_counts.get(class_idx, 1)  # Avoid division by zero
+        weight = total_samples / (num_classes * count)
+        weights.append(weight)
+    
+    return weights
+
+
+def get_class_weights_for_training(config: Dict) -> Dict[str, list]:
+    """Compute class weights from training dataset to handle imbalance.
+    
+    Returns dict with 'country_class_weights' and 'us_state_class_weights'.
+    """
+    ds = ensure_dataset(config)
+    mappings = build_label_mappings(ds["train"])
+    train_dataset = ds["train"]
+    
+    result = {}
+    
+    # Country weights
+    country_col = mappings["country"]["column"]
+    country_weights = compute_class_weights(
+        train_dataset, 
+        country_col, 
+        len(mappings["country"]["mapping"])
+    )
+    result["country_class_weights"] = country_weights
+    
+    # US state weights
+    us_state_col = mappings["us_state"]["column"]
+    us_state_weights = compute_class_weights(
+        train_dataset,
+        us_state_col,
+        len(mappings["us_state"]["mapping"])
+    )
+    result["us_state_class_weights"] = us_state_weights
+    
+    return result
+
+
 def default_transforms(image_size: int = 224):
     return T.Compose(
         [
             T.Resize(image_size),
             T.CenterCrop(image_size),
+            T.ToTensor(),
+            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
+
+
+def augmented_transforms(image_size: int = 224):
+    """Stronger augmentation for training with limited data."""
+    return T.Compose(
+        [
+            T.RandomResizedCrop(image_size, scale=(0.8, 1.0)),
+            T.RandomHorizontalFlip(p=0.5),
+            T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+            T.RandomRotation(10),
             T.ToTensor(),
             T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
@@ -188,10 +262,12 @@ def get_dataloaders(config: Dict):
     image_size = data_cfg.get("image_size", 224)
     batch_size = config["training"]["batch_size"]
 
-    transforms = default_transforms(image_size)
+    # Use augmented transforms for training, regular transforms for validation
+    train_transforms = augmented_transforms(image_size)
+    val_transforms = default_transforms(image_size)
 
-    train_ds = HuggingFaceImageDataset(ds["train"], mappings, image_column, transforms)
-    val_ds = HuggingFaceImageDataset(ds["validation"], mappings, image_column, transforms)
+    train_ds = HuggingFaceImageDataset(ds["train"], mappings, image_column, train_transforms)
+    val_ds = HuggingFaceImageDataset(ds["validation"], mappings, image_column, val_transforms)
 
     return (
         DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=collate_fn),

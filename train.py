@@ -64,7 +64,13 @@ def get_label_cardinalities(config):
 
 
 def compute_loss(predictions, targets, config, device):
-  criterion = nn.CrossEntropyLoss()
+  # class weights to handle imbalanced dataset
+  country_weights = config["training"].get("country_class_weights")
+  if country_weights is not None:
+    country_weights = torch.tensor(country_weights, device=device, dtype=torch.float32)
+    criterion = nn.CrossEntropyLoss(weight=country_weights)
+  else:
+    criterion = nn.CrossEntropyLoss()
 
   loss_country = criterion(predictions["country"], targets["country"].to(device))
 
@@ -76,7 +82,16 @@ def compute_loss(predictions, targets, config, device):
   if is_us_mask.sum() > 0:
     us_logits = predictions["us_state"][is_us_mask]
     us_targets = targets["us_state"].to(device)[is_us_mask]
-    loss_us = criterion(us_logits, us_targets)
+    
+    # For US states, also use class weights if available
+    us_weights = config["training"].get("us_state_class_weights")
+    if us_weights is not None:
+      us_weights = torch.tensor(us_weights, device=device, dtype=torch.float32)
+      us_criterion = nn.CrossEntropyLoss(weight=us_weights)
+    else:
+      us_criterion = nn.CrossEntropyLoss()
+    
+    loss_us = us_criterion(us_logits, us_targets)
   else:
     loss_us = torch.tensor(0.0, device=device)
 
@@ -147,6 +162,8 @@ def main():
 
     if args.lr is not None:
         config["training"]["lr_head"] = args.lr
+        # for finetune mode, also set lr_backbone at 0.1 * lr_head ratio
+        config["training"]["lr_backbone"] = args.lr * 0.1
     if args.batch_size is not None:
         config["training"]["batch_size"] = args.batch_size
     if args.epochs is not None:
@@ -158,6 +175,13 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
+
+    # class weights to handle imbalanced dataset
+    dataset_module = importlib.import_module("dataset")
+    if hasattr(dataset_module, "get_class_weights_for_training"):
+        class_weights = dataset_module.get_class_weights_for_training(config)
+        config["training"].update(class_weights)
+        print("Class weights computed for country and US state predictions")
 
     train_loader, val_loader = get_dataloaders(config)
     num_countries, num_us_states = get_label_cardinalities(config)
