@@ -80,7 +80,7 @@ def score_all(lp_wrapper, ft_wrapper, dataset, device, batch_size):
 def make_cam(wrapper, target_layers, image_tensor, target_class, device):
     cam = GradCAM(model=wrapper, target_layers=target_layers, reshape_transform=reshape_transform)
     grayscale = cam(
-        input_tensor=image_tensor.unsqueeze(0).to(device),
+        input_tensor=image_tensor.unsqueeze(0).to(device).requires_grad_(True),
         targets=[ClassifierOutputTarget(target_class)],
     )
     return grayscale[0]
@@ -116,7 +116,7 @@ def main():
     ds        = ensure_dataset(config)
     split_ds  = ds[args.split]
     image_col = resolve_image_column(split_ds)
-    mappings  = build_label_mappings(split_ds)
+    mappings  = build_label_mappings(ds["train"])
 
     idx_to_country = {v: k for k, v in mappings["country"]["mapping"].items()}
     num_countries  = len(mappings["country"]["mapping"])
