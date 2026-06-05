@@ -287,14 +287,19 @@ def _plot_world_map(results: Dict[str, Any], plots_dir: Path, split: str):
         print("geopandas not installed — skipping world map (pip install geopandas)")
         return
 
+    world = None
     try:
+        import geodatasets
+        world = gpd.read_file(geodatasets.get_path("naturalearth.lowres"))
+    except Exception:
+        pass
+    if world is None:
         try:
             world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
-        except AttributeError:
-            import geodatasets
-            world = gpd.read_file(geodatasets.get_path("naturalearth.lowres"))
-    except Exception as e:
-        print(f"Could not load world map data ({e}) — skipping world map")
+        except Exception:
+            pass
+    if world is None:
+        print("Could not load world map data — skipping world map. Run: pip install geodatasets")
         return
 
     per_country_acc = results.get("per_country_accuracy", {})
