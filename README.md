@@ -68,10 +68,28 @@ python3 tune.py --search grid --n_trials 20 --metrics_dir tuning_metrics --outpu
 ### 5. Evaluate
 
 ```bash
-python3 evaluate.py --checkpoint best_finetune_model.pt --split test --metrics_path metrics/test_metrics.json
+python3 evaluate.py \
+  --checkpoint best_finetune_model.pt \
+  --model_name finetune_v1 \
+  --split test \
+  --metrics_path metrics/metrics.json \
+  --plots_dir plots/
 ```
 
 Reports `country_accuracy`, `us_state_accuracy`, `decade_accuracy`.
+
+| Flag | Description |
+|------|-------------|
+| `--checkpoint` | Path to `.pt` model file |
+| `--model_name` | Optional name tag — outputs go into `plots/<name>/` and `metrics/<name>/metrics.json` |
+| `--split` | `train`, `validation`, or `test` (default: `test`) |
+| `--metrics_path` | JSON file to write metrics to |
+| `--plots_dir` | Directory to save accuracy plots |
+| `--batch_size` | Batch size (default: 64) |
+
+Plots saved (per split):
+- `{split}_decade_accuracy.png` — country accuracy per decade, with overall accuracy line
+- `{split}_overall_accuracy.png` — country vs US state accuracy summary
 
 ### 6. Grad-CAM
 

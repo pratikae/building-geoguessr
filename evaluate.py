@@ -155,6 +155,7 @@ def parse_args():
     parser.add_argument("--checkpoint", required=True, help="Model checkpoint file")
     parser.add_argument("--split", default="test", choices=["train", "validation", "test"], help="Dataset split to evaluate")
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size for evaluation")
+    parser.add_argument("--model_name", default=None, help="Name tag used to organise outputs into a subdirectory")
     parser.add_argument("--metrics_path", default=None, help="Optional JSON path to save metrics")
     parser.add_argument("--plots_dir", default=None, help="Optional directory to save accuracy plots")
     return parser.parse_args()
@@ -177,13 +178,19 @@ def main():
     print(json.dumps(results, indent=2))
 
     if args.metrics_path:
-        Path(args.metrics_path).parent.mkdir(parents=True, exist_ok=True)
-        with open(args.metrics_path, "w") as fp:
+        metrics_path = Path(args.metrics_path)
+        if args.model_name:
+            metrics_path = metrics_path.parent / args.model_name / metrics_path.name
+        metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(metrics_path, "w") as fp:
             json.dump(results, fp, indent=2)
 
     if args.plots_dir:
-        plot_results(results, Path(args.plots_dir), args.split)
-        print(f"Plots saved to {args.plots_dir}")
+        plots_dir = Path(args.plots_dir)
+        if args.model_name:
+            plots_dir = plots_dir / args.model_name
+        plot_results(results, plots_dir, args.split)
+        print(f"Plots saved to {plots_dir}")
 
 
 if __name__ == "__main__":
