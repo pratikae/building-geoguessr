@@ -80,6 +80,8 @@ all_data = all_data.map(lambda x, idx: {"Country": x["Country"] if x["Country"] 
 all_data = all_data.filter(lambda x: x["Country"] is not None)
 print(f"Reverse geocoding: {success_count} succeeded, {failed_count} failed.")
 
+all_data = all_data.map(lambda x: {"Country": "United States" if x["Country"] == "United States of America" else x["Country"]})
+
 all_data = all_data.map(lambda x, idx: {"id": idx}, with_indices=True)
 all_data = all_data.map(
     lambda x: {"is_us": 1 if x["Country"] in ("United States", "United States of America") else 0}
