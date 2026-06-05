@@ -105,6 +105,10 @@ def evaluate(model: torch.nn.Module, dataloader: DataLoader):
             str(decade): 100.0 * stats["correct"] / stats["total"]
             for decade, stats in sorted(decade_stats.items())
         },
+        "decade_counts": {
+            str(decade): stats["total"]
+            for decade, stats in sorted(decade_stats.items())
+        },
     }
     return results
 
@@ -114,9 +118,11 @@ def plot_results(results: Dict[str, Any], plots_dir: Path, split: str):
 
     # decade accuracy bar chart
     decade_acc = results["decade_accuracy"]
+    decade_counts = results.get("decade_counts", {})
     if decade_acc:
         decades = [int(d) for d in decade_acc.keys()]
         accs = [decade_acc[str(d)] for d in decades]
+        counts = [decade_counts.get(str(d), 0) for d in decades]
         labels = [f"{d}s" for d in decades]
 
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -124,11 +130,13 @@ def plot_results(results: Dict[str, Any], plots_dir: Path, split: str):
         ax.set_xlabel("Decade")
         ax.set_ylabel("Country Accuracy (%)")
         ax.set_title(f"Country Accuracy by Decade ({split} split)")
-        ax.set_ylim(0, 100)
+        ax.set_ylim(0, 110)
         ax.axhline(results["country_accuracy"], color="tomato", linestyle="--", linewidth=1.5, label=f"Overall ({results['country_accuracy']:.1f}%)")
         ax.legend()
-        for bar, val in zip(bars, accs):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1, f"{val:.1f}%", ha="center", va="bottom", fontsize=8)
+        for bar, val, n in zip(bars, accs, counts):
+            x = bar.get_x() + bar.get_width() / 2
+            ax.text(x, bar.get_height() + 1, f"{val:.1f}%", ha="center", va="bottom", fontsize=8)
+            ax.text(x, bar.get_height() + 5.5, f"n={n}", ha="center", va="bottom", fontsize=7, color="gray")
         fig.tight_layout()
         fig.savefig(plots_dir / f"{split}_decade_accuracy.png", dpi=150)
         plt.close(fig)
