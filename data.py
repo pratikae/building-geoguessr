@@ -74,7 +74,7 @@ for data in gz.search(coordinates): # gz.search() returns a generator
 # an existing Country column exists
 # use those if not None,  otherwise use the reverse geocoded country
 
-all_data = all_data.map(lambda x, idx: {"Country": x["Country"] if x["Country"] is not None else countries[idx],
+all_data = all_data.map(lambda x, idx: {"Country": x["Country"] if x["Country"] is not None and x["Country"] != "Unknown" else countries[idx],
                                         "State": states[idx]}, with_indices=True)
 
 all_data = all_data.filter(lambda x: x["Country"] is not None)
@@ -86,6 +86,9 @@ all_data = all_data.map(lambda x, idx: {"id": idx}, with_indices=True)
 all_data = all_data.map(
     lambda x: {"is_us": 1 if x["Country"] in ("United States", "United States of America") else 0}
 )
+
+# remove any with country Unknown, since those won't be useful for training or evaluation
+all_data = all_data.filter(lambda x: x["Country"] != "Unknown")
 
 
 # split into train/val/test based on year
