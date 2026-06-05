@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
+import matplotlib.pyplot as plt
 import torch
 import yaml
 from torch.utils.data import DataLoader
@@ -108,6 +109,46 @@ def evaluate(model: torch.nn.Module, dataloader: DataLoader):
     return results
 
 
+def plot_results(results: Dict[str, Any], plots_dir: Path, split: str):
+    plots_dir.mkdir(parents=True, exist_ok=True)
+
+    # decade accuracy bar chart
+    decade_acc = results["decade_accuracy"]
+    if decade_acc:
+        decades = [int(d) for d in decade_acc.keys()]
+        accs = [decade_acc[str(d)] for d in decades]
+        labels = [f"{d}s" for d in decades]
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        bars = ax.bar(labels, accs, color="steelblue", edgecolor="white")
+        ax.set_xlabel("Decade")
+        ax.set_ylabel("Country Accuracy (%)")
+        ax.set_title(f"Country Accuracy by Decade ({split} split)")
+        ax.set_ylim(0, 100)
+        ax.axhline(results["country_accuracy"], color="tomato", linestyle="--", linewidth=1.5, label=f"Overall ({results['country_accuracy']:.1f}%)")
+        ax.legend()
+        for bar, val in zip(bars, accs):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1, f"{val:.1f}%", ha="center", va="bottom", fontsize=8)
+        fig.tight_layout()
+        fig.savefig(plots_dir / f"{split}_decade_accuracy.png", dpi=150)
+        plt.close(fig)
+
+    # overall accuracy summary bar chart
+    summary_labels = ["Country", "US State"]
+    summary_vals = [results["country_accuracy"], results["us_state_accuracy"]]
+
+    fig, ax = plt.subplots(figsize=(5, 4))
+    bars = ax.bar(summary_labels, summary_vals, color=["steelblue", "seagreen"], edgecolor="white")
+    ax.set_ylabel("Accuracy (%)")
+    ax.set_title(f"Overall Accuracy ({split} split)")
+    ax.set_ylim(0, 100)
+    for bar, val in zip(bars, summary_vals):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1, f"{val:.1f}%", ha="center", va="bottom", fontsize=10)
+    fig.tight_layout()
+    fig.savefig(plots_dir / f"{split}_overall_accuracy.png", dpi=150)
+    plt.close(fig)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate a trained model on a dataset split.")
     parser.add_argument("--config", default="config.yaml", help="Path to config file")
@@ -115,6 +156,7 @@ def parse_args():
     parser.add_argument("--split", default="test", choices=["train", "validation", "test"], help="Dataset split to evaluate")
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size for evaluation")
     parser.add_argument("--metrics_path", default=None, help="Optional JSON path to save metrics")
+    parser.add_argument("--plots_dir", default=None, help="Optional directory to save accuracy plots")
     return parser.parse_args()
 
 
@@ -138,6 +180,10 @@ def main():
         Path(args.metrics_path).parent.mkdir(parents=True, exist_ok=True)
         with open(args.metrics_path, "w") as fp:
             json.dump(results, fp, indent=2)
+
+    if args.plots_dir:
+        plot_results(results, Path(args.plots_dir), args.split)
+        print(f"Plots saved to {args.plots_dir}")
 
 
 if __name__ == "__main__":
