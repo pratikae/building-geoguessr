@@ -107,8 +107,10 @@ TRANSFORMS = T.Compose([
 
 
 def _load_model(filename: str) -> BobTheBuilder:
-    m = BobTheBuilder(NUM_COUNTRIES, NUM_US_STATES, CONFIG)
     state = torch.load(ROOT / "models" / filename, map_location=DEVICE, weights_only=True)
+    num_countries = state["country_head.4.weight"].shape[0]
+    num_us_states = state["us_state_head.4.weight"].shape[0]
+    m = BobTheBuilder(num_countries, num_us_states, CONFIG)
     m.load_state_dict(state)
     m.to(DEVICE)
     m.eval()
