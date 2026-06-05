@@ -131,7 +131,17 @@ def plot_results(results: Dict[str, Any], plots_dir: Path, split: str):
         ax.set_ylabel("Country Accuracy (%)")
         ax.set_title(f"Country Accuracy by Decade ({split} split)")
         ax.set_ylim(0, 110)
-        ax.axhline(results["country_accuracy"], color="tomato", linestyle="--", linewidth=1.5, label=f"Overall ({results['country_accuracy']:.1f}%)")
+
+        xs = list(range(len(decades)))
+        m, b = (lambda x, y: (
+            (len(x) * sum(xi * yi for xi, yi in zip(x, y)) - sum(x) * sum(y)) /
+            (len(x) * sum(xi ** 2 for xi in x) - sum(x) ** 2),
+            (sum(y) - ((len(x) * sum(xi * yi for xi, yi in zip(x, y)) - sum(x) * sum(y)) /
+            (len(x) * sum(xi ** 2 for xi in x) - sum(x) ** 2)) * sum(x)) / len(x)
+        ))(xs, accs)
+        trend = [m * xi + b for xi in xs]
+        direction = "improving" if m > 0 else "declining"
+        ax.plot(xs, trend, color="tomato", linestyle="--", linewidth=1.5, label=f"Trend ({direction}, {m:+.1f}%/decade)")
         ax.legend()
         for bar, val, n in zip(bars, accs, counts):
             x = bar.get_x() + bar.get_width() / 2
