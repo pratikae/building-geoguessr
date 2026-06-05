@@ -8,3 +8,4 @@ tqdm
 grad-cam
 matplotlib
 geopandas
+geodatasets
