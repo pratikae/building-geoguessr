@@ -1,0 +1,98 @@
+#!/bin/bash
+
+# Hyak Klone running guide:
+# git clone into /gscratch/stf/$USER/
+# should be /gscratch/stf/$USER/building-geoguessr
+# cd into that directory and run commands to download data
+# cd back out into /gscratch/stf/$USER
+#
+# NOTE: this script currently hard codes many things, including the working directory, CHANGE IT
+# To prepare the .venv:
+# $ salloc -A stf -p ckpt-g2 -N 1 -c 8 --gpus-per-node=l40:1 --mem=32G
+# $ apptainer shell --nv -B building-geoguessr:/source --pwd /source docker://python:3.14-trixie
+# (inside apptainer)
+# $ python3 -m venv .venv
+# $ source .venv/bin/activate
+#  (finish setting up venv, e.g. pip install -r requirements.txt)
+# cd back out into /gscratch/stf/$USER
+#
+# copy this script into /gscratch/stf/$USER/
+# run it from there, and it will generate a bunch of sbatch scripts in /gscratch/stf/$USER/scripts/ and submit them to the cluster
+# results will be saved in /gscratch/stf/$USER/building-geoguessr/tune_results/
+# run ./compare_tune.py to compare results across different runs (do it inside a compute node)
+#
+# 8 cpus and 32 GB RAM is typical.
+# Using ckpt-g2 partition. AMD Epic Genoa.
+# for GPU:
+# NVIDIA L40S is a little faster, but have been there way more problematic (ones that are available are defective and slurm has a hard time scheduling them)
+#    they tend to fail and fail fast.
+# NVIDIA L40 has been much more stable.
+# 4 hours should be sufficient, but it can be increased.
+# took about 3 hours to train everything here
+# 
+# Final batch:
+# 12 jobs for finetuning, 12 jobs for linear probing, grid search, 3 lrs, 2 weight decays, 2 batch sizes
+# 24 NVIDIA L40 GPUs, 8 cpus and 32 GB RAM each
+# Ran for about 3 hours.
+
+
+experiment_types=("finetune" "linear_probe")
+batch_sizes=(32 64)
+weight_decays=(0.0 1e-2)
+lrs=(1e-4 3e-5 1e-5)
+
+for experiment_type in "${experiment_types[@]}"; do
+    counter=0
+    if [ "$experiment_type" == "finetune" ]; then
+        exp_id="ft"
+    elif [ "$experiment_type" == "linear_probe" ]; then
+        exp_id="lp"
+    else
+        echo "Unknown experiment type: $experiment_type"
+        exit 1
+    fi
+    for batch_size in "${batch_sizes[@]}"; do
+        for weight_decay in "${weight_decays[@]}"; do
+            for lr in "${lrs[@]}"; do
+                filename="tune_${exp_id}_bs${batch_size}_wd${weight_decay}_lr${lr}.sh"
+                cat > "scripts/${filename}" <<EOL
+#!/bin/bash
+
+#SBATCH --job-name=t_${exp_id}_${counter}
+#SBATCH --partition=ckpt-g2
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
+#SBATCH --gpus-per-node=l40:1
+#SBATCH -o log/%x_%j.out
+#SBATCH --time=4:00:00
+#SBATCH --chdir=/gscratch/stf/albertdu
+
+echo "TUNING experiment_type=${experiment_type} batch_size=${batch_size} weight_decay=${weight_decay} lr=${lr}"
+
+apptainer exec --nv \
+  -B /gscratch/stf/albertdu/building-geoguessr:/source \
+  --pwd /source \
+  docker://python:3.14-trixie \
+  bash -lc '
+    source .venv/bin/activate
+    echo "venv activated"
+    python3 tune.py \
+      --checkpoint_dir tune_results/checkpoints_tune_${exp_id}_${counter} \
+      --search grid \
+      --n_trials 1 \
+      --metrics_dir tune_results/tuning_metrics_${exp_id}_${counter} \
+      --experiment_types ${experiment_type} \
+      --output tune_results/tuning_results_${exp_id}_${counter}.csv \
+      --logs_dir tune_results/logs_${exp_id}_${counter} \
+      --batch_sizes ${batch_size} \
+      --weight_decays ${weight_decay} \
+      --lrs ${lr}
+  '
+EOL
+                sbatch "scripts/${filename}"
+                counter=$((counter + 1))
+            done
+        done
+    done
+done
