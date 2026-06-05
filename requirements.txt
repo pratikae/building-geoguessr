@@ -7,3 +7,5 @@ python-gazetteer
 tqdm
 grad-cam
 matplotlib
+geopandas
+geodatasets

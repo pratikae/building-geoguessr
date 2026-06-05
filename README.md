@@ -68,10 +68,59 @@ python3 tune.py --search grid --n_trials 20 --metrics_dir tuning_metrics --outpu
 ### 5. Evaluate
 
 ```bash
-python3 evaluate.py --checkpoint best_finetune_model.pt --split test --metrics_path metrics/test_metrics.json
+python3 evaluate.py \
+  --checkpoint best_finetune_model.pt \
+  --model_name finetune_v1 \
+  --split test \
+  --metrics_path metrics/metrics.json \
+  --plots_dir plots/
 ```
 
-Reports `country_accuracy`, `us_state_accuracy`, `decade_accuracy`.
+To compare two models (e.g. linear probe vs fine-tune):
+
+```bash
+python3 evaluate.py \
+  --checkpoint best_finetune_model.pt \
+  --model_name finetune \
+  --compare_checkpoint best_linear_probe_model.pt \
+  --compare_model_name linear_probe \
+  --split test \
+  --plots_dir plots/
+```
+
+**Flags**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--checkpoint` | — | Path to `.pt` model checkpoint (required) |
+| `--model_name` | — | Name tag — per-model outputs go into `plots/<name>/` and `metrics/<name>/` |
+| `--split` | `test` | `train`, `validation`, or `test` |
+| `--batch_size` | `64` | Batch size |
+| `--metrics_path` | — | JSON path to save full metrics (including confusion data) |
+| `--plots_dir` | — | Directory to save plots |
+| `--compare_checkpoint` | — | Second `.pt` checkpoint for side-by-side comparison plots |
+| `--compare_model_name` | — | Name for the second model |
+| `--confusion_top_n` | `20` | Number of countries shown in the confusion matrix |
+
+**Plots produced per model** (saved under `plots/<model_name>/`):
+
+| File | Description |
+|------|-------------|
+| `{split}_decade_accuracy.png` | Country accuracy per decade with linear trend line and sample counts |
+| `{split}_overall_accuracy.png` | Country vs US state accuracy summary |
+| `{split}_topk_decade_accuracy.png` | Top-1 / Top-3 / Top-5 accuracy by decade — shows whether region is still detectable even when exact country is wrong |
+| `{split}_per_country_accuracy.png` | Horizontal bar chart of every country sorted by accuracy, coloured green→red |
+| `{split}_world_map.png` | Choropleth map of per-country accuracy (requires `geopandas`) |
+| `{split}_confusion_matrix.png` | Row-normalised confusion matrix for the top N countries by count |
+
+**Comparison plots** (saved directly in `plots/` when `--compare_checkpoint` is given):
+
+| File | Description |
+|------|-------------|
+| `comparison_decade_accuracy.png` | Both models' decade accuracy + trend lines on one chart |
+| `comparison_overall_accuracy.png` | Side-by-side country / US state accuracy bars |
+
+> **World map note:** requires `geopandas` (`pip install geopandas`). If not installed the plot is skipped and the rest run normally.
 
 ### 6. Grad-CAM
 
