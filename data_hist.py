@@ -6,7 +6,7 @@ ds = load_from_disk(DEFAULT_DATASET_PATH)
 
 counts = Counter()
 for split_name, split in ds.items():
-    if split_name == "test":
+    if True:
         col = resolve_column(split, LABEL_COLUMN_CANDIDATES["country"])
         if col is None:
             raise RuntimeError(f"No country column found in split '{split_name}'")
