@@ -13,8 +13,10 @@ import torch
 import torch.nn.functional as F
 import torchvision.transforms as T
 import yaml
-from fastapi import FastAPI, HTTPException, Query, UploadFile, File
+from datasets import load_from_disk
+from fastapi import FastAPI, HTTPException, Query, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from PIL import Image
 from pydantic import BaseModel
 
@@ -98,6 +100,24 @@ def _country_meta(name: str) -> tuple[str, str]:
     return "XX", "Unknown"
 
 
+def _parse_latitude(text: str) -> float:
+    text = text.replace("°", "").replace("°", "").strip()
+    if text.endswith("N"):
+        return float(text[:-1])
+    elif text.endswith("S"):
+        return -float(text[:-1])
+    raise ValueError(f"Invalid latitude: {text}")
+
+
+def _parse_longitude(text: str) -> float:
+    text = text.replace("°", "").replace("°", "").strip()
+    if text.endswith("E"):
+        return float(text[:-1])
+    elif text.endswith("W"):
+        return -float(text[:-1])
+    raise ValueError(f"Invalid longitude: {text}")
+
+
 TRANSFORMS = T.Compose([
     T.Resize(224),
     T.CenterCrop(224),
@@ -124,6 +144,11 @@ MODELS: dict[str, BobTheBuilder] = {
 }
 print("Models ready.")
 
+print("Loading test dataset...")
+TEST_DS = load_from_disk(str(ROOT / "resplit_year_guessr_dataset"))["test"]
+DS_LEN = len(TEST_DS)
+print(f"Dataset ready: {DS_LEN} test buildings.")
+
 
 def _run_inference(image_bytes: bytes, model_key: str = "finetune") -> dict:
     model = MODELS.get(model_key)
@@ -147,7 +172,6 @@ def _run_inference(image_bytes: bytes, model_key: str = "finetune") -> dict:
     top_us_conf = float(us_probs[top_us_idx])
     top_us_name = US_STATE_IDX2NAME.get(top_us_idx) or "Unknown"
 
-    # top-5 country predictions
     top5_vals, top5_idxs = country_probs.topk(5)
     top5 = [
         {"country": COUNTRY_IDX2NAME.get(int(i)) or "Unknown", "confidence": float(v)}
@@ -161,6 +185,12 @@ def _run_inference(image_bytes: bytes, model_key: str = "finetune") -> dict:
         "us_state_confidence": top_us_conf,
         "top5_countries": top5,
     }
+
+
+def _pil_to_jpeg_bytes(img: Image.Image) -> bytes:
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
 
 
 # Schemas
@@ -202,6 +232,31 @@ class Building(BaseModel):
     coordinates: Coordinates
     yearBuilt: int
     continent: str
+
+
+def _row_to_building(row_idx: int, base_url: str) -> Building:
+    row = TEST_DS[row_idx]
+    try:
+        lat = _parse_latitude(row["Latitude"])
+        lng = _parse_longitude(row["Longitude"])
+    except (ValueError, KeyError):
+        lat, lng = 0.0, 0.0
+
+    country_name = row.get("Country") or "Unknown"
+    code, continent = _country_meta(country_name)
+
+    image_url = f"{base_url.rstrip('/')}/api/buildings/{row_idx}/image"
+
+    return Building(
+        id=str(row_idx),
+        imageUrl=image_url,
+        name=row.get("Building") or f"Building #{row_idx}",
+        country=country_name,
+        countryCode=code,
+        coordinates=Coordinates(lat=lat, lng=lng),
+        yearBuilt=int(row.get("Year") or 1946),
+        continent=continent,
+    )
 
 
 def _make_prediction_response(result: dict) -> PredictionResponse:
@@ -252,18 +307,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 _UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36"
-
-MOCK_BUILDINGS = [
-    Building(id="1", imageUrl="https://upload.wikimedia.org/wikipedia/commons/a/a0/Sydney_Australia._(21652882908).jpg", name="Sydney Opera House", country="Australia", countryCode="AU", coordinates=Coordinates(lat=-33.8568, lng=151.2153), yearBuilt=1973, continent="Oceania"),
-    Building(id="2", imageUrl="https://upload.wikimedia.org/wikipedia/commons/6/6f/Palace_of_the_Parliament_%28HDR%29.jpg", name="Palace of the Parliament", country="Romania", countryCode="RO", coordinates=Coordinates(lat=44.4275, lng=26.0878), yearBuilt=1997, continent="Europe"),
-    Building(id="3", imageUrl="https://upload.wikimedia.org/wikipedia/commons/c/c3/Burj_Khalifa.jpg", name="Burj Khalifa", country="United Arab Emirates", countryCode="AE", coordinates=Coordinates(lat=25.1972, lng=55.2744), yearBuilt=2010, continent="Asia"),
-    Building(id="4", imageUrl="https://upload.wikimedia.org/wikipedia/commons/4/47/New_york_times_square-terabass.jpg", name="One Times Square", country="United States", countryCode="US", coordinates=Coordinates(lat=40.758, lng=-73.9855), yearBuilt=1904, continent="North America"),
-    Building(id="5", imageUrl="https://upload.wikimedia.org/wikipedia/commons/9/9a/Big_Ben_2013.jpg", name="Elizabeth Tower", country="United Kingdom", countryCode="GB", coordinates=Coordinates(lat=51.5007, lng=-0.1246), yearBuilt=1859, continent="Europe"),
-]
-
-_BUILDINGS_BY_ID = {b.id: b for b in MOCK_BUILDINGS}
 
 
 def _fetch_url(url: str) -> bytes:
@@ -274,20 +318,39 @@ def _fetch_url(url: str) -> bytes:
 
 @app.get("/")
 def root():
-    return {"status": "ok", "service": "BOB API", "device": str(DEVICE)}
+    return {"status": "ok", "service": "BOB API", "device": str(DEVICE), "buildings": DS_LEN}
 
 
 @app.get("/api/buildings/random", response_model=Building)
-def get_random_building():
-    return random.choice(MOCK_BUILDINGS)
+def get_random_building(request: Request):
+    row_idx = random.randint(0, DS_LEN - 1)
+    return _row_to_building(row_idx, str(request.base_url))
+
+
+@app.get("/api/buildings/{building_id}/image")
+def get_building_image(building_id: str):
+    try:
+        row_idx = int(building_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid building ID")
+    if row_idx < 0 or row_idx >= DS_LEN:
+        raise HTTPException(status_code=404, detail="Building not found")
+
+    row = TEST_DS[row_idx]
+    pil_img: Image.Image = row["Picture"]
+    jpeg_bytes = _pil_to_jpeg_bytes(pil_img)
+    return Response(content=jpeg_bytes, media_type="image/jpeg")
 
 
 @app.get("/api/buildings/{building_id}", response_model=Building)
-def get_building(building_id: str):
-    b = _BUILDINGS_BY_ID.get(building_id)
-    if not b:
+def get_building(building_id: str, request: Request):
+    try:
+        row_idx = int(building_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid building ID")
+    if row_idx < 0 or row_idx >= DS_LEN:
         raise HTTPException(status_code=404, detail="Building not found")
-    return b
+    return _row_to_building(row_idx, str(request.base_url))
 
 
 @app.post("/api/predict/{building_id}", response_model=PredictionResponse)
@@ -295,18 +358,23 @@ def predict_location(
     building_id: str,
     model: str = Query(default="finetune", description="'finetune' or 'linear_probe'"),
 ):
-    b = _BUILDINGS_BY_ID.get(building_id)
-    if not b:
-        raise HTTPException(status_code=404, detail="Building not found")
     try:
-        image_bytes = _fetch_url(b.imageUrl)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Failed to fetch image: {exc}")
+        row_idx = int(building_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid building ID")
+    if row_idx < 0 or row_idx >= DS_LEN:
+        raise HTTPException(status_code=404, detail="Building not found")
+
+    row = TEST_DS[row_idx]
+    pil_img: Image.Image = row["Picture"]
+    image_bytes = _pil_to_jpeg_bytes(pil_img)
+
     try:
         result = _run_inference(image_bytes, model_key=model)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return _make_prediction_response(result)
+
 
 @app.post("/api/predict-image", response_model=PredictionResponse)
 async def predict_from_upload(
