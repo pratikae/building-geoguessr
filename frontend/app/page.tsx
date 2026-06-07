@@ -1,238 +1,210 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { X, MapPin, Cpu, Trophy } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 const MONO = "var(--font-geist-mono)";
-const GOLD = "#d4a017";
+// Bob the Builder's palette — overalls blue + plaid-shirt orange
+const BOB_BLUE = "#4a9eff";
+const BOB_ORANGE = "#ff8c42";
 
-const ANIM: Record<string, string> = {
-  left:   "scrapFromLeft",
-  right:  "scrapFromRight",
-  top:    "scrapFromTop",
-  bottom: "scrapFromBottom",
-};
-
-const SCRAP = [
-  // FLOATING — sized to match the centre's scale
-  { src: "/buildings6.png", w: 660, h: 435,
-    css: { left: "1%", top: "30%", width: "36%" },
-    rotate: -3.2, from: "left", delay: 0.0 },
-  { src: "/buildings7.png", w: 900, h: 280,
-    css: { right: "0%", top: "8%", width: "50%" },
-    rotate: 2.0, from: "right", delay: 0.1 },
-  // BOTTOM ROW — right to the bottom edge, black cut lines hidden
-  { src: "/buildings2.png", w: 580, h: 720,
-    css: { left: "-2%", bottom: "-12%", width: "26%" },
-    rotate: 3.5, from: "bottom", delay: 0.2 },
-  // Fill left gap: dome building tucked in
-  { src: "/buildings4.png", w: 560, h: 460,
-    css: { left: "8%", bottom: "-10%", width: "24%" },
-    rotate: -2.2, from: "bottom", delay: 0.28 },
-  // Fill further left gap: narrow tall portrait
-  { src: "/buildings3.png", w: 580, h: 720,
-    css: { left: "20%", bottom: "-18%", width: "20%" },
-    rotate: 1.8, from: "bottom", delay: 0.35 },
-  { src: "/buildings1.png", w: 900, h: 280,
-    css: { left: "30%", bottom: "-3%", width: "46%" },
-    rotate: -1.0, from: "bottom", delay: 0.4 },
-  { src: "/buildings4.png", w: 560, h: 460,
-    css: { right: "18%", bottom: "-14%", width: "25%" },
-    rotate: 2.8, from: "bottom", delay: 0.5 },
-  { src: "/buildings3.png", w: 580, h: 720,
-    css: { right: "-3%", bottom: "-12%", width: "27%" },
-    rotate: -4.0, from: "bottom", delay: 0.75 },
-  { src: "/buildings5.png", w: 550, h: 850,
-    css: { right: "3%", bottom: "-28%", width: "25%" },
-    rotate: -3.2, from: "bottom", delay: 0.6 },
-  { src: "/buildings8.png", w: 840, h: 320,
-    css: { right: "-1%", bottom: "-4%", width: "40%" },
-    rotate: 1.8, from: "bottom", delay: 0.65 },
+const BRIEFING_LINES = [
+"Every building used to tell you where it was from.",
+"Globalization changed that. Same materials, same styles, same look everywhere.",
+"Bob is an AI trained on 44,000 historic buildings from 150+ countries.",
+"He'll guess where a modern building stands. So will you.",
+"Five rounds. One pin each. Beat Bob."
 ];
 
-const ALL_LANDED_MS = (0.75 + 0.92) * 1000 + 450;
-
-function StartModal({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: "rgba(0,0,0,0.88)", backdropFilter: "blur(12px)" }}>
-      <div className="relative rounded-3xl overflow-hidden fade-in-up"
-        style={{ width: 520, background: "#0e0c09", border: "1px solid rgba(212,160,23,0.35)", boxShadow: "0 0 100px rgba(212,160,23,0.1)" }}>
-        <div style={{ height: 2, background: "linear-gradient(90deg,transparent,#d4a017,transparent)" }} />
-        <button onClick={onClose} className="absolute top-5 right-5"
-          style={{ color: "#7a7060", background: "none", border: "none", cursor: "pointer" }}>
-          <X size={22} />
-        </button>
-        <div className="flex flex-col items-center text-center gap-6" style={{ padding: "2.2rem 2.6rem 2.6rem" }}>
-          <Image src="/bob_logo.png" alt="Bob" width={80} height={80} unoptimized style={{ borderRadius: 14, objectFit: "cover" }} />
-          <div>
-            <div style={{ color: GOLD, fontFamily: MONO, fontSize: "0.82rem", letterSpacing: "0.22em", marginBottom: 12 }}>YOUR OPPONENT</div>
-            <h2 className="font-bold" style={{ fontSize: "2rem", color: "#f0ebe0", lineHeight: 1.12 }}>
-              Ready to challenge<br />Bob the Builder?
-            </h2>
-          </div>
-          <p style={{ color: "#7a7060", fontSize: "1rem", lineHeight: 1.75, maxWidth: 360 }}>
-            Bob is an AI trained on 44,000 historic buildings. He will guess where every modern building is from. So will you.
-          </p>
-          <div className="w-full flex flex-col gap-2.5">
-            {[
-              { icon: <MapPin size={16} />, text: "5 rounds, one mystery building per round" },
-              { icon: <Trophy size={16} />, text: "Drop a pin on the globe to place your guess" },
-              { icon: <Cpu   size={16} />, text: "Bob reveals his analysis and guess after yours" },
-            ].map(({ icon, text }, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-xl text-left"
-                style={{ background: "#1a1a12", border: "1px solid rgba(212,160,23,0.1)", padding: "13px 16px" }}>
-                <span style={{ color: GOLD, flexShrink: 0 }}>{icon}</span>
-                <span style={{ color: "#a09282", fontFamily: MONO, fontSize: "0.9rem" }}>{text}</span>
-              </div>
-            ))}
-          </div>
-          <Link href="/game" className="w-full flex items-center justify-center rounded-2xl font-bold transition-all"
-            style={{ padding: "18px", fontSize: "1.1rem", background: "linear-gradient(135deg,rgba(212,160,23,0.22),rgba(139,92,246,0.14))", border: "1px solid rgba(212,160,23,0.6)", color: GOLD, fontFamily: MONO, letterSpacing: "0.07em", boxShadow: "0 0 40px rgba(212,160,23,0.12)" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = "0 0 56px rgba(212,160,23,0.24)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = "0 0 40px rgba(212,160,23,0.12)"; }}>
-            Let&apos;s go
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FlipCard({ onChallenge }: { onChallenge: () => void }) {
-  const [flipped, setFlipped] = useState(false);
-
-  const faceBase: React.CSSProperties = {
-    position: "absolute",
-    inset: 0,
-    borderRadius: 28,
-    backfaceVisibility: "hidden",
-    WebkitBackfaceVisibility: "hidden" as React.CSSProperties["WebkitBackfaceVisibility"],
-    background: "#111109",
-    border: "1px solid rgba(212,160,23,0.38)",
-    boxShadow: "0 0 80px rgba(0,0,0,0.85), 0 0 0 1px rgba(212,160,23,0.06)",
-    overflow: "hidden",
-    display: "flex",
-    flexDirection: "column",
-  };
-
-  const goldBar = (
-    <div style={{ height: 3, flexShrink: 0, background: "linear-gradient(90deg,transparent,#d4a017,transparent)" }} />
-  );
-
-  return (
-    <div style={{ perspective: 1200, width: "clamp(500px, 36vw, 600px)", height: "clamp(640px, 90vh, 860px)" }}>
-      <div style={{
-        position: "relative", width: "100%", height: "100%",
-        transformStyle: "preserve-3d",
-        transition: "transform 0.75s cubic-bezier(0.4,0,0.2,1)",
-        transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
-      }}>
-
-        {/* FRONT */}
-        <div style={{ ...faceBase, cursor: "pointer" }}
-          onClick={() => setFlipped(true)} role="button" tabIndex={0}
-          onKeyDown={(e) => e.key === "Enter" && setFlipped(true)}>
-          {goldBar}
-          <div style={{ padding: "1.4rem 1.8rem 1.6rem", display: "flex", flexDirection: "column", alignItems: "center", flex: 1, gap: "0.8rem", minHeight: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, alignSelf: "flex-start", flexShrink: 0 }}>
-              <Image src="/bob_logo.png" alt="Beat Bob" width={40} height={40} unoptimized style={{ borderRadius: 10, objectFit: "cover" }} />
-              <span style={{ color: "#f0ebe0", fontFamily: MONO, fontSize: "1.05rem", fontWeight: 700, letterSpacing: "0.08em" }}>Beat Bob</span>
-            </div>
-            <div style={{ flex: 1, position: "relative", width: "100%", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0 }}>
-              <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 50% 60%, rgba(212,160,23,0.1) 0%, transparent 65%)" }} />
-              <Image src="/bob_person.png" alt="Bob the Builder" width={300} height={415} unoptimized
-                className="float"
-                style={{ position: "relative", zIndex: 1, maxHeight: "100%", width: "auto", filter: "drop-shadow(0 16px 52px rgba(0,0,0,0.95))" }}
-              />
-            </div>
-            <div style={{ flexShrink: 0, textAlign: "center" }}>
-              <div style={{ color: GOLD, fontFamily: MONO, fontSize: "0.9rem", letterSpacing: "0.15em" }}>TAP TO MEET BOB</div>
-              <div style={{ color: "#3a3628", fontFamily: MONO, fontSize: "0.76rem", marginTop: 4 }}>your AI opponent</div>
-            </div>
-          </div>
-        </div>
-
-        {/* BACK — click anywhere flips back to front */}
-        <div style={{ ...faceBase, transform: "rotateY(180deg)", cursor: "pointer" }}
-          onClick={() => setFlipped(false)}>
-          {goldBar}
-          <div style={{ padding: "1.8rem 2.2rem 1.8rem", display: "flex", flexDirection: "column", flex: 1, gap: "1rem", minHeight: 0, overflow: "hidden" }}>
-            <div style={{ color: "rgba(212,160,23,0.55)", fontFamily: MONO, fontSize: "0.8rem", letterSpacing: "0.22em", flexShrink: 0 }}>
-              THE QUESTION
-            </div>
-            <h2 className="font-bold" style={{ fontSize: "1.9rem", color: "#f0ebe0", lineHeight: 1.1, flexShrink: 0 }}>
-              Every building used to tell you{" "}
-              <span className="gradient-text">where it was from.</span>
-            </h2>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.9rem", overflow: "hidden" }}>
-              <p style={{ color: "#7a7060", fontSize: "1.2rem", lineHeight: 1.78 }}>
-                Regional craft and centuries of tradition were baked into every arch and gable.
-                Then the world started sharing blueprints.
-              </p>
-              <p style={{ color: "#7a7060", fontSize: "1.2rem", lineHeight: 1.78 }}>
-                <strong style={{ color: "#a09282" }}>Bob the Builder</strong> is our AI trained on
-                44,000 historic buildings from 150+ countries. Can you beat him?
-              </p>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, flexShrink: 0 }}>
-              <button
-                onClick={(e) => { e.stopPropagation(); onChallenge(); }}
-                style={{ width: "100%", padding: "18px", fontSize: "1.1rem", background: "linear-gradient(135deg,rgba(212,160,23,0.2),rgba(139,92,246,0.12))", border: "1px solid rgba(212,160,23,0.55)", color: GOLD, fontFamily: MONO, letterSpacing: "0.06em", boxShadow: "0 0 28px rgba(212,160,23,0.12)", cursor: "pointer", borderRadius: 16, fontWeight: 700 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = "0 0 44px rgba(212,160,23,0.22)"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = "0 0 28px rgba(212,160,23,0.12)"; }}>
-                Challenge Bob
-              </button>
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  );
-}
-
-export default function Home() {
-  const [ready, setReady] = useState(false);
-  const [modal, setModal] = useState(false);
+function TypedLines({ lines, onDone }: { lines: string[]; onDone: () => void }) {
+  const [lineIdx, setLineIdx] = useState(0);
+  const [charIdx, setCharIdx] = useState(0);
+  const fired = useRef(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setReady(true), ALL_LANDED_MS);
+    if (lineIdx >= lines.length) {
+      if (!fired.current) { fired.current = true; onDone(); }
+      return;
+    }
+    const current = lines[lineIdx];
+    if (charIdx < current.length) {
+      const t = setTimeout(() => setCharIdx((c) => c + 1), 26);
+      return () => clearTimeout(t);
+    }
+    const t = setTimeout(() => { setLineIdx((l) => l + 1); setCharIdx(0); }, 650);
     return () => clearTimeout(t);
+  }, [lineIdx, charIdx, lines, onDone]);
+
+  return (
+    <div className="flex flex-col gap-2" style={{ fontFamily: MONO, fontSize: "clamp(0.92rem, 2.2vh, 1.15rem)", lineHeight: 1.55, color: BOB_ORANGE, textShadow: "0 0 10px rgba(255,140,66,0.4)", textAlign: "left" }}>
+      {lines.slice(0, lineIdx).map((l, i) => (
+        <p key={i} style={{ margin: 0 }}><span style={{ color: BOB_BLUE }}>&gt;</span> {l}</p>
+      ))}
+      {lineIdx < lines.length && (
+        <p style={{ margin: 0 }}>
+          <span style={{ color: BOB_BLUE }}>&gt;</span> {lines[lineIdx].slice(0, charIdx)}
+          <span style={{ display: "inline-block", color: BOB_BLUE, animation: "blink 1s step-end infinite" }}>█</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+type Phase = "hero" | "prompt" | "briefing";
+
+// How wide Bob should read relative to the video's own pixel grid — tuned once at a
+// reference size, then carried by `coverScale` to every viewport size/aspect ratio.
+const BOB_REFERENCE_PX = 850;
+
+export default function Home() {
+  const [phase, setPhase] = useState<Phase>("hero");
+  const [briefingDone, setBriefingDone] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [coverScale, setCoverScale] = useState(1);
+
+  const revealOverlay = (next: Phase) => phase === "hero" && setPhase(next);
+
+  // Bob must mask the footage's watermark, which scales with the video's own
+  // object-cover crop — not with the viewport directly. So we measure the actual
+  // cover scale factor (max of width-fit / height-fit ratios, exactly like `cover`
+  // computes it) and size Bob off that, keeping coverage correct at any window
+  // size or aspect ratio, including minimized/odd-shaped windows.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const recalc = () => {
+      if (!video.videoWidth || !video.videoHeight) return;
+      const scale = Math.max(
+        window.innerWidth / video.videoWidth,
+        window.innerHeight / video.videoHeight
+      );
+      setCoverScale(scale);
+    };
+
+    video.addEventListener("loadedmetadata", recalc);
+    window.addEventListener("resize", recalc);
+    recalc();
+
+    return () => {
+      video.removeEventListener("loadedmetadata", recalc);
+      window.removeEventListener("resize", recalc);
+    };
   }, []);
 
   return (
     <main className="h-full w-full relative overflow-hidden" style={{ background: "#080806" }}>
 
-      {SCRAP.map((p, i) => (
-        <div key={i} className="absolute"
-          style={{ ...p.css, transform: `rotate(${p.rotate}deg)`, zIndex: 10 } as React.CSSProperties}>
-          <div style={{
-            opacity: 0,
-            animation: `${ANIM[p.from]} 0.85s cubic-bezier(0.22,1,0.36,1) forwards`,
-            animationDelay: `${p.delay}s`,
-            mixBlendMode: "lighten",
-          } as React.CSSProperties}>
-            <Image src={p.src} alt="" width={p.w} height={p.h}
-              style={{ width: "100%", height: "auto" }} unoptimized priority={i < 3} />
-          </div>
-        </div>
-      ))}
+      {/* Looping video background */}
+      <video
+        ref={videoRef}
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{ zIndex: 0 }}
+      >
+        <source src="/bob_better.mp4" type="video/mp4" />
+      </video>
 
-      <div className="absolute inset-0 flex items-center justify-center"
-        style={{
-          zIndex: 20,
-          opacity: ready ? 1 : 0,
-          transform: ready ? "translateY(0)" : "translateY(20px)",
-          transition: "opacity 0.9s ease, transform 0.9s ease",
-          pointerEvents: ready ? "auto" : "none",
-        }}>
-        <FlipCard onChallenge={() => setModal(true)} />
+      {/* Bob bursting through — masks the footage's watermark + click target.
+          Sized off the video's measured cover-scale so it always covers, at any window size. */}
+      <div
+        onClick={() => revealOverlay("prompt")}
+        role="button"
+        tabIndex={0}
+        aria-label="Meet Bob the Builder"
+        onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && phase === "hero") { e.preventDefault(); setPhase("prompt"); } }}
+        className="absolute inset-0 flex items-center justify-center"
+        style={{ zIndex: 2, cursor: phase === "hero" ? "pointer" : "default", outline: "none" }}
+      >
+        <Image
+          src="/Bob_Out_Of_Globe.png"
+          alt="Bob the Builder bursting through the globe"
+          width={6000}
+          height={3375}
+          unoptimized
+          priority
+          className="float"
+          style={{ width: `${Math.round(coverScale * BOB_REFERENCE_PX)}px`, height: "auto", filter: "drop-shadow(0 24px 70px rgba(0,0,0,0.65))" }}
+        />
       </div>
 
-      {modal && <StartModal onClose={() => setModal(false)} />}
+      {/* Onboarding sequence — hard cut to black, everything renders like an old terminal/CRT briefing.
+          Content is anchored to a fixed top-left point (not centered) so each typed line lands in
+          its final spot and stays put — like writing on a page — instead of re-centering as it grows. */}
+      {phase !== "hero" && (
+        <div className="absolute inset-0" style={{ zIndex: 10, background: "#000" }}>
+          <div className="scanlines absolute inset-0 pointer-events-none" />
+
+          {phase === "prompt" && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <button
+                onClick={() => setPhase("briefing")}
+                className="transition-colors"
+                style={{
+                  padding: "16px 40px", fontSize: "1.05rem", background: "transparent",
+                  border: `1px solid ${BOB_BLUE}80`, borderRadius: 4,
+                  color: BOB_ORANGE, fontFamily: MONO, letterSpacing: "0.18em",
+                  textShadow: "0 0 10px rgba(255,140,66,0.4)", boxShadow: `0 0 28px ${BOB_BLUE}30`,
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = `${BOB_BLUE}18`; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+              >
+                <span style={{ color: BOB_BLUE }}>&gt;</span> GET STARTED_
+              </button>
+            </div>
+          )}
+
+          {phase === "briefing" && (
+            <>
+              {/* Bob — vertically centered on the right edge, close beside the brief */}
+              <div className="absolute" style={{ right: "8%", top: "50%", transform: "translateY(-50%)", zIndex: 1 }}>
+                <Image
+                  src="/bob_person.png"
+                  alt="Bob the Builder"
+                  width={1124}
+                  height={1435}
+                  unoptimized
+                  priority
+                  className="float"
+                  style={{ height: "min(56vh, 520px)", width: "auto", filter: "drop-shadow(0 24px 70px rgba(0,0,0,0.7))" }}
+                />
+              </div>
+
+              {/* Briefing copy — pulled in next to Bob and roughly vertically centered.
+                  `top` is offset by a fixed pixel amount (not 50% + transform) so the
+                  anchor point itself never moves as lines type in — only the content
+                  below it grows, keeping already-typed lines planted in place. */}
+              <div className="absolute" style={{ top: "calc(50% - 185px)", left: "12%", width: "min(580px, 40vw)", maxHeight: "78vh", zIndex: 2 }}>
+                <div className="flex flex-col gap-4">
+                  <div style={{ color: BOB_BLUE, opacity: 0.7, fontFamily: MONO, fontSize: "0.74rem", letterSpacing: "0.32em" }}>
+                    — INCOMING TRANSMISSION —
+                  </div>
+                  <TypedLines lines={BRIEFING_LINES} onDone={() => setBriefingDone(true)} />
+                  {briefingDone && (
+                    <Link href="/game" className="self-start flex items-center gap-3 transition-colors"
+                      style={{
+                        padding: "12px 30px", fontSize: "0.9rem", background: "transparent",
+                        border: `1px solid ${BOB_BLUE}80`, borderRadius: 4,
+                        color: BOB_ORANGE, fontFamily: MONO, letterSpacing: "0.14em",
+                        textShadow: "0 0 10px rgba(255,140,66,0.4)", boxShadow: `0 0 28px ${BOB_BLUE}30`,
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = `${BOB_BLUE}18`; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
+                      <span style={{ color: BOB_BLUE }}>&gt;</span> LET&apos;S GO <ArrowRight size={16} />
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </main>
   );
 }
