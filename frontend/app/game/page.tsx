@@ -5,14 +5,13 @@ import { Send, RotateCcw, ChevronLeft, Trophy, Cpu, MapPin } from "lucide-react"
 import Link from "next/link";
 import Image from "next/image";
 
-import { Building, Coordinates, Country, GamePhase, ModelPrediction, RoundScore, GlobePin } from "@/lib/types";
+import { Building, Coordinates, Country, GamePhase, RoundScore, GlobePin } from "@/lib/types";
 import { COUNTRIES } from "@/lib/countries";
 import { haversineDistance, calculateScore, formatScore, totalScore } from "@/lib/gameLogic";
-import { fetchRandomBuilding, fetchPrediction } from "@/lib/api";
+import { fetchRandomBuilding, fetchPrediction, reverseGeocode } from "@/lib/api";
 
 import GlobeWrapper from "@/components/globe/GlobeWrapper";
 import CountrySelector from "@/components/game/CountrySelector";
-import ModelAnalysis from "@/components/game/ModelAnalysis";
 import RoundResults from "@/components/game/RoundResults";
 
 const TOTAL_ROUNDS = 5;
@@ -153,7 +152,7 @@ function PhotoPanel({ building }: { building: Building }) {
             <br />is this building?
           </div>
           <div style={{ color: "#64748b", fontFamily: MONO, fontSize: "0.95rem" }}>
-            Built {building.yearBuilt} Â· Drop a pin on the globe
+            Built {building.yearBuilt} · Drop a pin on the globe
           </div>
         </div>
 
@@ -191,7 +190,6 @@ export default function GamePage() {
   const [building, setBuilding] = useState<Building | null>(null);
   const [userPin, setUserPin] = useState<Coordinates | null>(null);
   const [userCountry, setUserCountry] = useState<string | null>(null);
-  const [modelPrediction, setModelPrediction] = useState<ModelPrediction | null>(null);
   const [scores, setScores] = useState<RoundScore[]>([]);
   const [globeFocus, setGlobeFocus] = useState<{ lat: number; lng: number; altitude: number } | undefined>();
 
@@ -203,7 +201,6 @@ export default function GamePage() {
     setBuilding(null);
     setUserPin(null);
     setUserCountry(null);
-    setModelPrediction(null);
     setGlobeFocus(undefined);
     fetchRandomBuilding().then(setBuilding);
   }, [round]);
@@ -222,24 +219,21 @@ export default function GamePage() {
 
   const handleSubmit = useCallback(async () => {
     if (!userPin || !building) return;
-    // Fetch prediction first (fast on local backend), then start the analysis animation
-    const prediction = await fetchPrediction(building);
-    setModelPrediction(prediction);
-    setPhase("analyzing");
-  }, [userPin, building]);
-
-  const handleAnalysisComplete = useCallback(() => {
-    if (!userPin || !building || !modelPrediction) return;
-    const userDist = haversineDistance(userPin, building.coordinates);
-    const modelDist = haversineDistance(modelPrediction.coordinates, building.coordinates);
+    const [prediction, geocoded] = await Promise.all([
+      fetchPrediction(building),
+      reverseGeocode(userPin.lat, userPin.lng),
+    ]);
     const sel = COUNTRIES.find((c) => c.code === userCountry);
+    const guessCountryName = geocoded ?? sel?.name ?? "Unknown";
+    const userDist = haversineDistance(userPin, building.coordinates);
+    const modelDist = haversineDistance(prediction.coordinates, building.coordinates);
     setScores((prev) => [...prev, {
       round, buildingName: building.name, trueCountry: building.country,
-      userGuess: { country: sel?.name ?? "Unknown", coordinates: userPin, distanceKm: userDist, score: calculateScore(userDist) },
-      modelGuess: { country: modelPrediction.country, coordinates: modelPrediction.coordinates, distanceKm: modelDist, score: calculateScore(modelDist) },
+      userGuess: { country: guessCountryName, coordinates: userPin, distanceKm: userDist, score: calculateScore(userDist) },
+      modelGuess: { country: prediction.country, coordinates: prediction.coordinates, distanceKm: modelDist, score: calculateScore(modelDist) },
     }]);
     setPhase("results");
-  }, [userPin, building, modelPrediction, userCountry, round]);
+  }, [userPin, building, userCountry, round]);
 
   const handleNext = useCallback(() => {
     if (round >= TOTAL_ROUNDS) setPhase("gameover");
@@ -353,10 +347,6 @@ export default function GamePage() {
           )}
         </div>
       </div>
-
-      {phase === "analyzing" && building && modelPrediction && (
-        <ModelAnalysis building={building} prediction={modelPrediction} onComplete={handleAnalysisComplete} />
-      )}
 
       {phase === "results" && currentRoundScore && (
         <RoundResults

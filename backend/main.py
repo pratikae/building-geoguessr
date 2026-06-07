@@ -46,6 +46,12 @@ try:
 except ImportError:
     _PYCOUNTRY = None
 
+try:
+    from gazetteer import Gazetteer as _Gazetteer
+    _GZ = _Gazetteer()
+except Exception:
+    _GZ = None
+
 # alpha-2 -> continent
 _CONTINENT: dict[str, str] = {
     "AF": "Africa", "AL": "Europe", "DZ": "Africa", "AO": "Africa", "AQ": "Antarctica",
@@ -319,6 +325,18 @@ def _fetch_url(url: str) -> bytes:
 @app.get("/")
 def root():
     return {"status": "ok", "service": "BOB API", "device": str(DEVICE), "buildings": DS_LEN}
+
+
+@app.get("/api/reverse-geocode")
+def reverse_geocode(lat: float = Query(...), lng: float = Query(...)):
+    if _GZ is None:
+        raise HTTPException(status_code=503, detail="Gazetteer not available")
+    results = list(_GZ.search([(lng, lat)]))
+    r = results[0] if results else None
+    country = r.result.admin1 if (r and r.result) else None
+    if country == "United States of America":
+        country = "United States"
+    return {"country": country}
 
 
 @app.get("/api/buildings/random", response_model=Building)

@@ -153,7 +153,8 @@ Runs on `http://localhost:8000`. Endpoints:
 |--------|------|-------------|
 | `GET` | `/api/buildings/random` | Random post-1945 building |
 | `GET` | `/api/buildings/{id}` | Specific building |
-| `POST` | `/api/predict/{building_id}` | Model prediction + Grad-CAM |
+| `POST` | `/api/predict/{building_id}` | Model prediction |
+| `GET` | `/api/reverse-geocode?lat=X&lng=Y` | Country name for a lat/lng pin (uses `python-gazetteer`) |
 
 ### Plugging in the real model
 
@@ -199,9 +200,8 @@ NEXT_PUBLIC_API_URL=https://your-backend.com npm run dev
 
 1. **Landing** — scrapbook collage intro, flip card with Bob
 2. **Game** — building photo (left) + interactive globe (right), 5 rounds
-3. **Guess** — click globe to place pin, optionally pick country from dropdown
-4. **Analysis** — "Bob is thinking" overlay shows predicted features + confidence
-5. **Results** — arcs on globe, score comparison (you vs Bob), cumulative total
+3. **Guess** — click globe to place pin, optionally pick country from dropdown to navigate
+4. **Results** — arcs on globe, score comparison (you vs Bob), cumulative total
 
 ### Key files
 
@@ -210,7 +210,7 @@ frontend/
 ├── app/page.tsx              # Landing page (scrapbook + flip card)
 ├── app/game/page.tsx         # Game page (full layout)
 ├── components/globe/         # react-globe.gl wrapper + custom pin
-├── components/game/          # ModelAnalysis, RoundResults, CountrySelector
+├── components/game/          # RoundResults, CountrySelector
 ├── lib/api.ts                # Fetch wrappers (+ mock fallback if backend down)
 ├── lib/types.ts              # Shared TypeScript types
 └── public/                   # Bob images, pin, scrapbook PNGs
