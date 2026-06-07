@@ -260,7 +260,7 @@ def _row_to_building(row_idx: int, base_url: str) -> Building:
         country=country_name,
         countryCode=code,
         coordinates=Coordinates(lat=lat, lng=lng),
-        yearBuilt=int(row.get("Year") or 1946),
+        yearBuilt=int(str(row.get("Year") or "1946").strip()[:4]) if row.get("Year") else 1946,
         continent=continent,
     )
 
@@ -341,8 +341,15 @@ def reverse_geocode(lat: float = Query(...), lng: float = Query(...)):
 
 @app.get("/api/buildings/random", response_model=Building)
 def get_random_building(request: Request):
-    row_idx = random.randint(0, DS_LEN - 1)
-    return _row_to_building(row_idx, str(request.base_url))
+    for _ in range(20):
+        row_idx = random.randint(0, DS_LEN - 1)
+        try:
+            building = _row_to_building(row_idx, str(request.base_url))
+            if building.coordinates.lat != 0.0 or building.coordinates.lng != 0.0:
+                return building
+        except Exception:
+            continue
+    raise HTTPException(status_code=500, detail="Could not find a valid building")
 
 
 @app.get("/api/buildings/{building_id}/image")
