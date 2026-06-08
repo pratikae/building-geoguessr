@@ -228,7 +228,7 @@ export default function GamePage() {
     const userDist = haversineDistance(userPin, building.coordinates);
     const modelDist = haversineDistance(prediction.coordinates, building.coordinates);
     setScores((prev) => [...prev, {
-      round, buildingName: building.name, trueCountry: building.country,
+      round, buildingName: building.name, trueCountry: building.country, trueCoordinates: building.coordinates,
       userGuess: { country: guessCountryName, coordinates: userPin, distanceKm: userDist, score: calculateScore(userDist) },
       modelGuess: { country: prediction.country, coordinates: prediction.coordinates, distanceKm: modelDist, score: calculateScore(modelDist) },
     }]);

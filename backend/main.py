@@ -1,11 +1,18 @@
 """
 BOB Backend — FastAPI with ViT-B/16 inference
+
+IMPORTANT on windows, enter: $env:PYTHONUTF8="1"
+into before starting python.
+
 """
+import asyncio
 import io
 import json
+import os
 import random
 import sys
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
@@ -31,6 +38,7 @@ with open(ROOT / "config.yaml") as f:
     CONFIG = yaml.safe_load(f)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# DEVICE = torch.device("cpu")
 NUM_COUNTRIES = 147
 NUM_US_STATES = 53
 
@@ -46,11 +54,21 @@ try:
 except ImportError:
     _PYCOUNTRY = None
 
-try:
-    from gazetteer import Gazetteer as _Gazetteer
-    _GZ = _Gazetteer()
-except Exception:
-    _GZ = None
+from gazetteer import Gazetteer
+
+# Single-threaded executor: Gazetteer is not thread-safe, so all calls
+# (including construction) must happen on the same thread.
+_GZ_EXECUTOR = ThreadPoolExecutor(max_workers=1)
+_GZ: Gazetteer = _GZ_EXECUTOR.submit(Gazetteer).result()
+
+
+def _gz_lookup(lng: float, lat: float) -> str | None:
+    results = list(_GZ.search([(lng, lat)]))
+    r = results[0] if results else None
+    country = r.result.admin1 if (r and r.result) else None
+    if country == "United States of America":
+        country = "United States"
+    return country
 
 # alpha-2 -> continent
 _CONTINENT: dict[str, str] = {
@@ -146,7 +164,7 @@ def _load_model(filename: str) -> BobTheBuilder:
 print(f"Loading models on {DEVICE}...")
 MODELS: dict[str, BobTheBuilder] = {
     "finetune": _load_model("best_finetune_model.pt"),
-    "linear_probe": _load_model("best_linear_probe_model.pt"),
+    # "linear_probe": _load_model("best_linear_probe_model.pt"),
 }
 print("Models ready.")
 
@@ -251,7 +269,8 @@ def _row_to_building(row_idx: int, base_url: str) -> Building:
     country_name = row.get("Country") or "Unknown"
     code, continent = _country_meta(country_name)
 
-    image_url = f"{base_url.rstrip('/')}/api/buildings/{row_idx}/image"
+    origin = os.environ.get("BACKEND_ORIGIN", "").rstrip("/") or base_url.rstrip("/")
+    image_url = f"{origin}/api/buildings/{row_idx}/image"
 
     return Building(
         id=str(row_idx),
@@ -307,7 +326,7 @@ app = FastAPI(title="BOB API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "https://bob.albertdu.net", "https://bobapi.albertdu.net"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -328,14 +347,9 @@ def root():
 
 
 @app.get("/api/reverse-geocode")
-def reverse_geocode(lat: float = Query(...), lng: float = Query(...)):
-    if _GZ is None:
-        raise HTTPException(status_code=503, detail="Gazetteer not available")
-    results = list(_GZ.search([(lng, lat)]))
-    r = results[0] if results else None
-    country = r.result.admin1 if (r and r.result) else None
-    if country == "United States of America":
-        country = "United States"
+async def reverse_geocode(lat: float = Query(...), lng: float = Query(...)):
+    loop = asyncio.get_event_loop()
+    country = await loop.run_in_executor(_GZ_EXECUTOR, _gz_lookup, lng, lat)
     return {"country": country}
 
 

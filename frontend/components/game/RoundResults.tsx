@@ -53,8 +53,8 @@ export default function RoundResults({
       size: 0.6,
     },
     {
-      lat: score.userGuess.coordinates.lat, // placeholder â€” would be true coords
-      lng: score.userGuess.coordinates.lng,
+      lat: score.trueCoordinates.lat,
+      lng: score.trueCoordinates.lng,
       color: "#10b981",
       label: `Actual: ${score.trueCountry}`,
       size: 0.8,
@@ -124,8 +124,8 @@ export default function RoundResults({
             pins={pins}
             arcs={arcs}
             interactive
-            focusLat={score.userGuess.coordinates.lat}
-            focusLng={score.userGuess.coordinates.lng}
+            focusLat={score.trueCoordinates.lat}
+            focusLng={score.trueCoordinates.lng}
             altitude={3}
           />
         </div>
