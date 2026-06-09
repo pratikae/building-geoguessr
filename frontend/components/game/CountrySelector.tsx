@@ -26,7 +26,7 @@ export default function CountrySelector({ value, onChange }: CountrySelectorProp
           c.name.toLowerCase().includes(query.toLowerCase()) ||
           c.continent.toLowerCase().includes(query.toLowerCase())
       ).slice(0, 20)
-    : COUNTRIES.slice(0, 20);
+    : COUNTRIES;
 
   const grouped = query.trim()
     ? null

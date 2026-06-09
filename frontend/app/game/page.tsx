@@ -26,7 +26,8 @@ function FinalScreen({ scores, onRestart }: { scores: RoundScore[]; onRestart: (
   const userWon = userTotal >= modelTotal;
 
   return (
-    <div className="h-full w-full flex flex-col items-center justify-center gap-10 px-6" style={{ background: "#080806" }}>
+    <div className="h-full w-full overflow-y-auto scroll-area" style={{ background: "#080806" }}>
+    <div className="min-h-full flex flex-col items-center justify-center gap-10 px-6 py-10">
       <div style={{ color: "#64748b", fontFamily: MONO, fontSize: "0.9rem", letterSpacing: "0.2em" }}>GAME OVER</div>
       <h1 className="text-center font-bold" style={{ fontSize: "clamp(3rem, 7vw, 5.5rem)", color: userWon ? "#10b981" : "#7c3aed", lineHeight: 1.1 }}>
         {userWon ? "You beat Bob." : "Bob wins this time."}
@@ -70,6 +71,7 @@ function FinalScreen({ scores, onRestart }: { scores: RoundScore[]; onRestart: (
           Home
         </Link>
       </div>
+    </div>
     </div>
   );
 }

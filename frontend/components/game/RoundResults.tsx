@@ -132,8 +132,8 @@ export default function RoundResults({
 
         {/* Score panel */}
         <div
-          className="col-span-2 flex flex-col gap-3 rounded-xl p-5 panel"
-          style={{ overflow: "hidden" }}
+          className="col-span-2 flex flex-col gap-3 rounded-xl p-5 panel scroll-area"
+          style={{ overflowY: "auto" }}
         >
           {/* Header */}
           <div>
@@ -167,7 +167,7 @@ export default function RoundResults({
           </div>
 
           {/* Comparison cards */}
-          <div className="flex-1 flex flex-col gap-2">
+          <div className="flex flex-col gap-2">
             <ScoreCard
               icon={<Target size={14} />}
               label="YOUR GUESS"
